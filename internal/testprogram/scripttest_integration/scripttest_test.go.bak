@@ -1,0 +1,408 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"rsc.io/script"
+	"rsc.io/script/scripttest"
+)
+
+// TestIntegrationCoverage tests our comprehensive multi-level binary execution with coverage
+func TestIntegrationCoverage(t *testing.T) {
+	// Enable integration coverage mode
+	os.Setenv("GO_INTEGRATION_COVERAGE", "1")
+	
+	// Setup coverage directory
+	coverageDir := filepath.Join(t.TempDir(), "coverage")
+	os.Setenv("GOCOVERDIR", coverageDir)
+	t.Logf("Coverage data will be collected in: %s", coverageDir)
+	
+	// Build all our test binaries
+	binaries, binDir := buildTestBinaries(t)
+	t.Logf("Built binaries in: %s", binDir)
+	
+	// Create curated PATH with our binaries
+	curatedPath := createCuratedPath(binDir)
+	
+	// Create custom scripttest engine with our commands
+	engine := &script.Engine{
+		Cmds: createCustomCommands(binaries),
+		Conds: scripttest.DefaultConds(),
+	}
+	
+	// Test different execution patterns
+	testCases := []struct {
+		name        string
+		scriptContent string
+		description string
+	}{
+		{
+			name: "basic_hello",
+			scriptContent: `
+# Test basic hello functionality with coverage
+main-tool hello World
+exec main hello TestUser
+`,
+			description: "Basic hello with tool and exec calls",
+		},
+		{
+			name: "command_chain", 
+			scriptContent: `
+# Test command chaining across multiple binaries
+main-tool chain
+exec main chain
+cmd1 process step1
+cmd2 analyze data
+cmd3 report results
+`,
+			description: "Command chaining across all binaries",
+		},
+		{
+			name: "recursive_calls",
+			scriptContent: `
+# Test recursive binary calls
+main-tool recursive 3
+exec main recursive 2
+exec cmd2 recursive 1
+`,
+			description: "Recursive calls between binaries",
+		},
+		{
+			name: "complex_workflow",
+			scriptContent: `
+# Test complex workflow with multiple execution levels
+main-tool tool build test deploy
+exec main hello ComplexTest
+cmd1 build project1
+cmd2 test integration
+cmd3 deploy production
+exec main chain
+`,
+			description: "Complex workflow hitting all code paths",
+		},
+		{
+			name: "coverage_variations",
+			scriptContent: `
+# Test different code paths for coverage variation
+main-tool hello Variation1
+exec main tool build
+cmd1 greet Variation1
+cmd2 elaborate Variation1
+cmd3 flourish Variation1
+exec main hello Variation2
+cmd1 chain
+cmd2 process transform
+cmd3 cleanup general
+`,
+			description: "Different code paths for coverage variation",
+		},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(subT *testing.T) {
+			subT.Logf("Running test: %s", tc.description)
+			
+			// Create test-specific coverage subdirectory
+			testCoverDir := filepath.Join(coverageDir, tc.name)
+			os.Setenv("GOCOVERDIR", testCoverDir)
+			
+			// Setup script environment with curated PATH
+			ctx := context.Background()
+			workDir := subT.TempDir()
+			
+			env := append(os.Environ(),
+				"PATH="+curatedPath,
+				"GOCOVERDIR="+testCoverDir,
+				"GO_INTEGRATION_COVERAGE=1",
+			)
+			
+			// Create script state
+			state, err := script.NewState(ctx, workDir, env)
+			if err != nil {
+				subT.Fatalf("Failed to create script state: %v", err)
+			}
+			
+			// Execute the script
+			subT.Logf("Executing script with coverage collection...")
+			scripttest.Run(subT, engine, state, tc.name+".txt", strings.NewReader(tc.scriptContent))
+			
+			// Verify coverage data was collected
+			verifyCoverageData(subT, testCoverDir, tc.name)
+			
+			// Reset GOCOVERDIR for next test
+			os.Setenv("GOCOVERDIR", coverageDir)
+		})
+	}
+	
+	// Final verification: check that we have coverage from all execution levels
+	verifyComprehensiveCoverage(t, coverageDir)
+}
+
+// buildTestBinaries builds all our test binaries with coverage enabled
+func buildTestBinaries(t *testing.T) (map[string]string, string) {
+	t.Helper()
+	
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatalf("Failed to create bin directory: %v", err)
+	}
+	
+	binaries := make(map[string]string)
+	
+	// Build each binary with coverage enabled
+	buildConfigs := []struct {
+		name    string
+		srcDir  string
+	}{
+		{"main", "main"},
+		{"cmd1", "cmd1"},
+		{"cmd2", "cmd2"},
+		{"cmd3", "cmd3"},
+	}
+	
+	for _, config := range buildConfigs {
+		binaryPath := filepath.Join(binDir, config.name)
+		if runtime.GOOS == "windows" {
+			binaryPath += ".exe"
+		}
+		
+		srcPath := filepath.Join(".", config.srcDir)
+		
+		t.Logf("Building %s from %s to %s", config.name, srcPath, binaryPath)
+		
+		// Build with coverage enabled
+		cmd := exec.Command("go", "build", "-cover", "-o", binaryPath, srcPath)
+		cmd.Stderr = os.Stderr
+		
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Failed to build %s: %v", config.name, err)
+		}
+		
+		binaries[config.name] = binaryPath
+		t.Logf("Successfully built %s", config.name)
+	}
+	
+	return binaries, binDir
+}
+
+// createCuratedPath creates a PATH with our test binaries
+func createCuratedPath(binDir string) string {
+	originalPath := os.Getenv("PATH")
+	return binDir + string(os.PathListSeparator) + originalPath
+}
+
+// createCustomCommands creates scripttest commands for our testing
+func createCustomCommands(binaries map[string]string) map[string]script.Cmd {
+	cmds := scripttest.DefaultCmds()
+	
+	// Add a custom command that calls our main program as a "go tool"
+	cmds["main-tool"] = script.Command(
+		script.CmdUsage{
+			Summary: "call main program as a go tool",
+			Args:    "operation [args...]",
+		},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 1 {
+				return nil, fmt.Errorf("main-tool requires at least one argument")
+			}
+			
+			mainBinary := binaries["main"]
+			
+			// Execute the main program with coverage collection
+			cmd := exec.Command(mainBinary, args...)
+			cmd.Dir = s.Getwd()
+			cmd.Env = s.Environ()
+			
+			// Ensure coverage environment is passed through
+			hasGoCoverDir := false
+			for _, env := range cmd.Env {
+				if strings.HasPrefix(env, "GOCOVERDIR=") {
+					hasGoCoverDir = true
+					break
+				}
+			}
+			if !hasGoCoverDir {
+				if coverDir := os.Getenv("GOCOVERDIR"); coverDir != "" {
+					cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+				}
+			}
+			
+			return func(s *script.State) (stdout, stderr string, err error) {
+				var outBuf, errBuf strings.Builder
+				cmd.Stdout = &outBuf
+				cmd.Stderr = &errBuf
+				
+				err = cmd.Run()
+				return outBuf.String(), errBuf.String(), err
+			}, nil
+		},
+	)
+	
+	// Add commands for direct binary execution (these will use exec internally)
+	for name, path := range binaries {
+		if name == "main" {
+			continue // Skip main, we handle it with main-tool
+		}
+		
+		binaryPath := path
+		cmds[name] = script.Command(
+			script.CmdUsage{
+				Summary: fmt.Sprintf("execute %s binary", name),
+				Args:    "operation [args...]",
+			},
+			func(s *script.State, args ...string) (script.WaitFunc, error) {
+				cmd := exec.Command(binaryPath, args...)
+				cmd.Dir = s.Getwd()
+				cmd.Env = s.Environ()
+				
+				// Ensure coverage environment is passed through
+				hasGoCoverDir := false
+				for _, env := range cmd.Env {
+					if strings.HasPrefix(env, "GOCOVERDIR=") {
+						hasGoCoverDir = true
+						break
+					}
+				}
+				if !hasGoCoverDir {
+					if coverDir := os.Getenv("GOCOVERDIR"); coverDir != "" {
+						cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+					}
+				}
+				
+				return func(s *script.State) (stdout, stderr string, err error) {
+					var outBuf, errBuf strings.Builder
+					cmd.Stdout = &outBuf
+					cmd.Stderr = &errBuf
+					
+					err = cmd.Run()
+					return outBuf.String(), errBuf.String(), err
+				}, nil
+			},
+		)
+	}
+	
+	return cmds
+}
+
+// verifyCoverageData verifies that coverage data was collected for a test
+func verifyCoverageData(t *testing.T, coverageDir, testName string) {
+	t.Helper()
+	
+	if _, err := os.Stat(coverageDir); os.IsNotExist(err) {
+		t.Errorf("Coverage directory does not exist: %s", coverageDir)
+		return
+	}
+	
+	entries, err := os.ReadDir(coverageDir)
+	if err != nil {
+		t.Errorf("Failed to read coverage directory: %v", err)
+		return
+	}
+	
+	var metaFiles, counterFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		
+		name := entry.Name()
+		if strings.HasPrefix(name, "covmeta.") {
+			metaFiles = append(metaFiles, name)
+		} else if strings.HasPrefix(name, "covcounters.") {
+			counterFiles = append(counterFiles, name)
+		}
+	}
+	
+	t.Logf("Test %s: Found %d meta files and %d counter files", testName, len(metaFiles), len(counterFiles))
+	
+	if len(metaFiles) == 0 {
+		t.Errorf("Test %s: No coverage meta files found", testName)
+	}
+	if len(counterFiles) == 0 {
+		t.Errorf("Test %s: No coverage counter files found", testName)
+	}
+	
+	// Log file details for debugging
+	for _, file := range append(metaFiles, counterFiles...) {
+		if info, err := os.Stat(filepath.Join(coverageDir, file)); err == nil {
+			t.Logf("Coverage file: %s (size: %d bytes, modified: %s)", 
+				file, info.Size(), info.ModTime().Format(time.RFC3339))
+		}
+	}
+}
+
+// verifyComprehensiveCoverage verifies we collected coverage from all execution levels
+func verifyComprehensiveCoverage(t *testing.T, coverageDir string) {
+	t.Helper()
+	
+	t.Logf("Verifying comprehensive coverage collection in: %s", coverageDir)
+	
+	// Walk through all subdirectories to collect coverage files
+	var allMetaFiles, allCounterFiles []string
+	
+	err := filepath.Walk(coverageDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		if info.IsDir() {
+			return nil
+		}
+		
+		name := info.Name()
+		if strings.HasPrefix(name, "covmeta.") {
+			allMetaFiles = append(allMetaFiles, path)
+		} else if strings.HasPrefix(name, "covcounters.") {
+			allCounterFiles = append(allCounterFiles, path)
+		}
+		
+		return nil
+	})
+	
+	if err != nil {
+		t.Errorf("Failed to walk coverage directory: %v", err)
+		return
+	}
+	
+	t.Logf("Total coverage files found: %d meta files, %d counter files", 
+		len(allMetaFiles), len(allCounterFiles))
+	
+	if len(allMetaFiles) == 0 {
+		t.Error("No coverage meta files found across all tests")
+	}
+	if len(allCounterFiles) == 0 {
+		t.Error("No coverage counter files found across all tests")
+	}
+	
+	// Verify we have coverage from multiple execution contexts
+	uniquePackages := make(map[string]bool)
+	for _, file := range allMetaFiles {
+		// Extract package identifier from filename
+		base := filepath.Base(file)
+		parts := strings.Split(base, ".")
+		if len(parts) >= 2 {
+			uniquePackages[parts[1]] = true
+		}
+	}
+	
+	t.Logf("Coverage collected from %d unique package contexts", len(uniquePackages))
+	
+	if len(uniquePackages) < 2 {
+		t.Logf("Warning: Expected coverage from multiple package contexts, found %d", len(uniquePackages))
+	}
+	
+	// Log summary
+	t.Logf("Integration coverage test summary:")
+	t.Logf("- Meta files: %d", len(allMetaFiles))
+	t.Logf("- Counter files: %d", len(allCounterFiles))
+	t.Logf("- Unique packages: %d", len(uniquePackages))
+	t.Logf("- Coverage directory: %s", coverageDir)
+}

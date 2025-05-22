@@ -1,0 +1,7 @@
+{
+    "Replace": {
+        "/Users/tmc/.local/homebrew/Cellar/go/1.24.3/libexec/src/runtime/coverage/coverage.go": "/Volumes/tmc/go/src/github.com/tmc/covutil/internal/testprogram/overlays/runtime/coverage/coverage.go",
+        "/Users/tmc/.local/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go": "/Volumes/tmc/go/src/github.com/tmc/covutil/internal/testprogram/overlays/testing/testing.go",
+        "github.com/rsc/script/scripttest/scripttest.go": "/Volumes/tmc/go/src/github.com/tmc/covutil/internal/testprogram/overlays/scripttest/scripttest.go"
+    }
+}

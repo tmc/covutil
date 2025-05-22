@@ -1,0 +1,31 @@
+Coverage Package Test Program
+=============================
+Command-line flags:
+  -output=covdata      Directory to write coverage data to
+  -skip-covdata=false   Skip running the go tool covdata command
+  -analyze-real=false    Analyze real coverage data in covdata2 directory
+
+Package Path: github.com/tmc/covutil/coverage
+
+Coverage File Constants:
+Meta File Prefix: covmeta
+Counter File Prefix: covcounters
+Meta File Version: 1
+Counter File Version: 1
+
+
+Counter Modes:
+Mode 'set': set
+Mode 'count': count
+Mode 'atomic': atomic
+Mode 'regonly': regonly
+Mode 'testmain': testmain
+Mode 'invalid': <invalid>
+
+Magic Constants:
+Meta Magic: [4]uint8{0x0, 0x63, 0x76, 0x6d}
+Counter Magic: [4]uint8{0x0, 0x63, 0x77, 0x6d}
+
+
+=== CONVERTING COVERAGE DATA TO JSON ===
+Error parsing coverage data: failed to parse counter file: failed to begin next segment: unexpected EOF

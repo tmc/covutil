@@ -1,0 +1,99 @@
+// Enhanced scripttest additions with coverage support and parallel control
+
+var (
+	// Global flag to disable t.Parallel calls
+	disableParallel bool
+	parallelMutex   sync.RWMutex
+)
+
+// SetParallelMode controls whether tests run in parallel
+func SetParallelMode(enabled bool) {
+	parallelMutex.Lock()
+	defer parallelMutex.Unlock()
+	disableParallel = !enabled
+}
+
+// IsParallelDisabled returns whether parallel execution is disabled
+func IsParallelDisabled() bool {
+	parallelMutex.RLock()
+	defer parallelMutex.RUnlock()
+	return disableParallel
+}
+
+// Run runs a script test with enhanced coverage data collection and parallel control.
+// If GOCOVERDIR is set, it creates a subdirectory for this test's coverage data.
+// If parallel mode is disabled, it skips calling t.Parallel().
+func Run(t *testing.T, ts TestScript, cmd string) {
+	t.Helper()
+	
+	// Check if we should skip t.Parallel()
+	if !IsParallelDisabled() {
+		t.Parallel()
+	}
+	
+	// Enhanced coverage data setup - create subdirectory if GOCOVERDIR is set
+	originalGoCoverDir := os.Getenv("GOCOVERDIR")
+	var coverageSubdir string
+	
+	if originalGoCoverDir != "" {
+		// Create coverage subdirectory for this test
+		testName := t.Name()
+		sanitizedName := sanitizeTestName(testName)
+		coverageSubdir = filepath.Join(originalGoCoverDir, sanitizedName)
+		
+		if err := os.MkdirAll(coverageSubdir, 0755); err != nil {
+			t.Logf("[SCRIPTTEST OVERLAY] Failed to create coverage subdirectory %s: %v", coverageSubdir, err)
+		} else {
+			os.Setenv("GOCOVERDIR", coverageSubdir)
+			t.Logf("[SCRIPTTEST OVERLAY] Coverage data for test '%s' will be collected in: %s", testName, coverageSubdir)
+		}
+	}
+	
+	// Add coverage cleanup if we created a subdirectory
+	if coverageSubdir != "" {
+		t.Cleanup(func() {
+			// Write coverage data for this test
+			if err := coverage.WriteMetaDir(coverageSubdir); err != nil {
+				t.Logf("[SCRIPTTEST OVERLAY] Failed to write meta data for test '%s': %v", testName, err)
+			}
+			if err := coverage.WriteCountersDir(coverageSubdir); err != nil {
+				t.Logf("[SCRIPTTEST OVERLAY] Failed to write counter data for test '%s': %v", testName, err)
+			}
+			t.Logf("[SCRIPTTEST OVERLAY] Coverage data written for test '%s' in: %s", testName, coverageSubdir)
+			
+			// Restore original GOCOVERDIR
+			if originalGoCoverDir != "" {
+				os.Setenv("GOCOVERDIR", originalGoCoverDir)
+			} else {
+				os.Unsetenv("GOCOVERDIR")
+			}
+		})
+	}
+	
+	// Call the original renamed run function
+	run(t, ts, cmd)
+}
+
+// sanitizeTestName converts a test name to a valid directory name
+func sanitizeTestName(testName string) string {
+	// Replace invalid characters with underscores
+	sanitized := strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+			return '_'
+		}
+		if r == ' ' {
+			return '_'
+		}
+		return r
+	}, testName)
+	
+	// Remove leading/trailing dots and spaces
+	sanitized = strings.Trim(sanitized, ". ")
+	
+	// Ensure it's not empty and not too long
+	if sanitized == "" || len(sanitized) > 200 {
+		return fmt.Sprintf("test_%d", len(testName)) // fallback name
+	}
+	
+	return sanitized
+}

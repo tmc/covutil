@@ -1,0 +1,61 @@
+# Integration test showing covtree and covforest working together
+env HOME=$WORK
+
+# Create sample coverage data structure
+mkdir -p project1/covdata
+mkdir -p project2/covdata
+
+cp sample_covmeta.bin project1/covdata/covmeta.proj1
+cp sample_covcounters.bin project1/covdata/covcounters.proj1.1234.5678
+
+cp sample_covmeta.bin project2/covdata/covmeta.proj2  
+cp sample_covcounters.bin project2/covdata/covcounters.proj2.1234.5678
+
+# Test covtree debug on both projects
+exec covtree debug -i=project1
+stdout 'Found 1 coverage directories'
+stdout 'project1/covdata'
+
+exec covtree debug -i=project2
+stdout 'Found 1 coverage directories'
+stdout 'project2/covdata'
+
+# Test nested scanning
+exec covtree debug -i=.
+stdout 'Found 2 coverage directories'
+stdout 'project1/covdata'
+stdout 'project2/covdata'
+
+# Try covtree commands (will fail due to dummy data but shows integration)
+! exec covtree percent -i=project1
+stderr 'failed to load coverage data'
+
+! exec covtree json -i=project1
+stderr 'failed to load coverage data'
+
+# Test covforest integration workflow
+exec covforest list
+stdout 'No coverage trees found'
+
+# Try adding projects to forest (will fail due to dummy data)
+! exec covforest add -i=project1 -name="Project 1 Main" -repo="github.com/example/project1" -branch="main"
+stderr 'failed to load coverage data'
+
+! exec covforest add -i=project2 -name="Project 2 Feature" -repo="github.com/example/project2" -branch="feature-x"
+stderr 'failed to load coverage data'
+
+# Show forest management commands work
+exec covforest summary
+stdout 'Trees: 0'
+
+exec covforest list -format=table
+stdout 'No coverage trees found'
+
+# Test that commands handle nested directory structure
+! exec covforest add -i=. -name="Multi-Project" 
+stderr 'failed to load coverage data'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing

@@ -1,0 +1,165 @@
+// Integration coverage testing utilities
+// This file provides integration coverage functions without modifying the testing package
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// RunWithIntegrationCoverage runs a test with enhanced coverage collection for integration tests
+func RunWithIntegrationCoverage(t *testing.T, name string, f func(*testing.T)) bool {
+	t.Helper()
+	
+	// Check if we're in integration coverage mode
+	goCoverDir := os.Getenv("GOCOVERDIR") 
+	if goCoverDir == "" {
+		// No coverage, run normally
+		return t.Run(name, f)
+	}
+	
+	// Enable integration coverage mode
+	originalIntegrationEnv := os.Getenv("GO_INTEGRATION_COVERAGE")
+	os.Setenv("GO_INTEGRATION_COVERAGE", "1")
+	defer func() {
+		if originalIntegrationEnv != "" {
+			os.Setenv("GO_INTEGRATION_COVERAGE", originalIntegrationEnv)
+		} else {
+			os.Unsetenv("GO_INTEGRATION_COVERAGE")
+		}
+	}()
+	
+	fmt.Printf("[TESTING INTEGRATION] Running integration test '%s' with coverage\n", name)
+	
+	// Create a subdirectory for this test's coverage data
+	testCoverDir := filepath.Join(goCoverDir, sanitizeTestName(name))
+	if err := os.MkdirAll(testCoverDir, 0755); err != nil {
+		t.Logf("[TESTING INTEGRATION] Warning: failed to create test coverage directory: %v", err)
+		return t.Run(name, f)
+	}
+	
+	// Set the test-specific coverage directory
+	originalGoCoverDir := os.Getenv("GOCOVERDIR")
+	os.Setenv("GOCOVERDIR", testCoverDir)
+	
+	// Setup cleanup to collect and report coverage data
+	cleanup := func() {
+		// Restore original GOCOVERDIR
+		if originalGoCoverDir != "" {
+			os.Setenv("GOCOVERDIR", originalGoCoverDir)
+		} else {
+			os.Unsetenv("GOCOVERDIR")
+		}
+	}
+	
+	// Run the test with enhanced coverage collection
+	result := func() bool {
+		defer cleanup()
+		return t.Run(name, func(subT *testing.T) {
+			subT.Helper()
+			f(subT)
+		})
+	}()
+	
+	return result
+}
+
+// ExecuteBinaryWithCoverage executes a binary and ensures coverage data is collected
+func ExecuteBinaryWithCoverage(t *testing.T, binary string, args ...string) error {
+	t.Helper()
+	
+	goCoverDir := os.Getenv("GOCOVERDIR")
+	if goCoverDir == "" {
+		// No coverage collection, execute normally  
+		cmd := exec.Command(binary, args...)
+		return cmd.Run()
+	}
+	
+	// Create a temporary coverage directory for this binary execution
+	binaryName := filepath.Base(binary)
+	binaryCoverDir := filepath.Join(goCoverDir, fmt.Sprintf("binary_%s_%d", sanitizeTestName(binaryName), os.Getpid()))
+	
+	if err := os.MkdirAll(binaryCoverDir, 0755); err != nil {
+		t.Logf("[TESTING INTEGRATION] Warning: failed to create binary coverage directory: %v", err)
+		// Continue without coverage for this binary
+		cmd := exec.Command(binary, args...)
+		return cmd.Run()
+	}
+	
+	t.Logf("[TESTING INTEGRATION] Executing binary %s with coverage collection in %s", binary, binaryCoverDir)
+	
+	// Execute the binary with coverage environment
+	cmd := exec.Command(binary, args...)
+	cmd.Env = append(os.Environ(), 
+		"GOCOVERDIR="+binaryCoverDir,
+		"GO_INTEGRATION_COVERAGE=1",
+	)
+	
+	err := cmd.Run()
+	
+	// After execution, try to collect any coverage data the binary may have written
+	if files, coverErr := filepath.Glob(filepath.Join(binaryCoverDir, "cov*")); coverErr == nil && len(files) > 0 {
+		t.Logf("[TESTING INTEGRATION] Binary %s wrote %d coverage files", binary, len(files))
+		
+		// Move coverage files to the test's coverage directory
+		for _, file := range files {
+			destFile := filepath.Join(goCoverDir, filepath.Base(file))
+			if moveErr := os.Rename(file, destFile); moveErr != nil {
+				t.Logf("[TESTING INTEGRATION] Warning: failed to move coverage file %s: %v", file, moveErr)
+			}
+		}
+	}
+	
+	// Cleanup temporary directory
+	os.RemoveAll(binaryCoverDir)
+	
+	return err
+}
+
+// sanitizeTestName converts a test name to a valid directory name
+func sanitizeTestName(testName string) string {
+	// Replace invalid characters with underscores
+	sanitized := strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+			return '_'
+		}
+		if r == ' ' {
+			return '_'
+		}
+		return r
+	}, testName)
+	
+	// Remove leading/trailing dots and spaces
+	sanitized = strings.Trim(sanitized, ". ")
+	
+	// Ensure it's not empty and not too long
+	if sanitized == "" || len(sanitized) > 200 {
+		return fmt.Sprintf("test_%d", len(testName)) // fallback name
+	}
+	
+	return sanitized
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+	
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+	
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}

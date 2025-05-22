@@ -1,0 +1,16 @@
+mode: set
+github.com/tmc/covutil/internal/testprogram/scripttest_integration/synthetic_coverage.go:36.30,37.89 1 1
+github.com/tmc/covutil/internal/testprogram/scripttest_integration/synthetic_coverage.go:43.81,44.28 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:3.1,3.22 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:4.1,4.25 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:5.1,5.28 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:6.1,6.28 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:9.1,9.24 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:10.1,10.12 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:11.1,11.14 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:12.1,12.24 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:13.1,13.13 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:16.1,16.28 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:17.1,17.30 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:20.1,20.11 1 1
+scripttest://TestSyntheticCoverage/synthetic_test.txt:21.1,21.7 1 1

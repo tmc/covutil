@@ -1,0 +1,6 @@
+{
+    "Replace": {
+        "/Users/tmc/.local/homebrew/Cellar/go/1.24.3/libexec/src/runtime/coverage/coverage.go": "runtime/coverage/coverage.go.in",
+        "/Users/tmc/.local/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go": "testing/testing.go"
+    }
+}

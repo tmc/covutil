@@ -1,0 +1,21 @@
+# Scripttest commands for TestSyntheticCoverage
+
+exec main hello World
+exec cmd1 greet Universe
+exec cmd2 elaborate Testing
+exec cmd3 flourish Coverage
+
+# Module setup
+go mod init testproject
+go mod tidy
+mkdir testdir
+echo "Hello" > test.txt
+cat test.txt
+
+# Error cases (should fail)
+! exec main invalid-command
+! exec cmd1 unknown-operation
+
+# Environment info
+go version
+go env

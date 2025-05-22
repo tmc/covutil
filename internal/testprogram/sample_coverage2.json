@@ -1,0 +1,127 @@
+{
+  "metadata": {
+    "header": {
+      "magic": "cvm",
+      "version": 1,
+      "total_length": 256,
+      "num_packages": 1,
+      "meta_file_hash": "different_hash_12345678901234567890",
+      "str_tab_offset": 144,
+      "str_tab_length": 8,
+      "str_tab_count": 1,
+      "counter_mode": "count",
+      "granularity": "perblock"
+    },
+    "packages": [
+      {
+        "name": "main",
+        "path": "github.com/example/testpkg",
+        "module": "github.com/example",
+        "hash": "different_hash_12345678901234567890",
+        "files": [
+          {
+            "name": "main.go",
+            "functions": [0, 1]
+          }
+        ],
+        "functions": [
+          {
+            "name": "main",
+            "file": "main.go", 
+            "start_line": 10,
+            "start_col": 1,
+            "end_line": 20,
+            "end_col": 1,
+            "num_stmts": 3,
+            "statements": [
+              {
+                "start_line": 11,
+                "start_col": 2,
+                "end_line": 11,
+                "end_col": 15,
+                "num_ctr": 1
+              },
+              {
+                "start_line": 15,
+                "start_col": 2,
+                "end_line": 15,
+                "end_col": 20,
+                "num_ctr": 1
+              },
+              {
+                "start_line": 18,
+                "start_col": 2,
+                "end_line": 18,
+                "end_col": 10,
+                "num_ctr": 1
+              }
+            ]
+          },
+          {
+            "name": "helper",
+            "file": "main.go",
+            "start_line": 25,
+            "start_col": 1,
+            "end_line": 30,
+            "end_col": 1,
+            "num_stmts": 2,
+            "statements": [
+              {
+                "start_line": 26,
+                "start_col": 2,
+                "end_line": 26,
+                "end_col": 12,
+                "num_ctr": 1
+              },
+              {
+                "start_line": 28,
+                "start_col": 2,
+                "end_line": 28,
+                "end_col": 8,
+                "num_ctr": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "counters": {
+    "header": {
+      "magic": "cwm",
+      "version": 1,
+      "meta_file_hash": "different_hash_12345678901234567890",
+      "num_segments": 1,
+      "args": [
+        {"key": "GOARCH", "value": "arm64"},
+        {"key": "GOOS", "value": "darwin"},
+        {"key": "argc", "value": "1"},
+        {"key": "argv0", "value": "/path/to/different_program"}
+      ],
+      "flavor": "uleb128",
+      "big_endian": false
+    },
+    "segments": [
+      {
+        "num_functions": 2,
+        "string_table": [
+          "GOARCH", "arm64", "GOOS", "darwin", 
+          "argc", "1", "argv0", "/path/to/different_program"
+        ],
+        "args_table": [0, 1, 2, 3, 4, 5, 6, 7],
+        "functions": [
+          {
+            "package_id": 0,
+            "func_id": 0,
+            "counters": [25, 12, 35]
+          },
+          {
+            "package_id": 0,
+            "func_id": 1,
+            "counters": [42, 18]
+          }
+        ]
+      }
+    ]
+  }
+}
