@@ -47,7 +47,7 @@ package coverage
 var rtPkgs = [...]string{
 	"internal/asan",
 	"internal/byteorder",
-	"internal/coverage/rtcov",
+	"github.com/tmc/covutil/internal/coverage/rtcov",
 	"internal/cpu",
 	"internal/bytealg",
 	"internal/goarch",

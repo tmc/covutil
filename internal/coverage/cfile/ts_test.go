@@ -7,7 +7,6 @@ package cfile
 import (
 	"encoding/json"
 	"flag"
-	"internal/testenv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	_ "unsafe"
 
 	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/testenv"
 )
 
 func testGoCoverDir(t *testing.T) string {
@@ -79,7 +79,7 @@ func TestTestSupport(t *testing.T) {
 func TestCoverageSnapshot(t *testing.T) {
 	testenv.MustHaveGoRun(t)
 	args := []string{"test", "-tags", "SELECT_USING_THIS_TAG",
-		"-cover", "-run=TestCoverageSnapshotImpl", "internal/coverage/cfile"}
+		"-cover", "-run=TestCoverageSnapshotImpl", "github.com/tmc/covutil/internal/coverage/cfile"}
 	cmd := exec.Command(testenv.GoToolPath(t), args...)
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go test failed (%v): %s", err, b)

@@ -7,7 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"internal/coverage/slicewriter"
+	"github.com/tmc/covutil/internal/coverage/slicewriter"
 	"io"
 	"log"
 	"os"

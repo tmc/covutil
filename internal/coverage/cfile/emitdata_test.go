@@ -6,16 +6,15 @@ package cfile
 
 import (
 	"fmt"
-	"internal/platform"
-	"internal/testenv"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/raceenabled"
+	"github.com/tmc/covutil/internal/testenv"
 )
 
 // Set to true for debugging (linux only).
@@ -466,8 +465,7 @@ func TestIssue56006EmitDataRaceCoverRunningGoroutine(t *testing.T) {
 	// This test requires "go test -race -cover", meaning that we need
 	// go build, go run, and "-race" support.
 	testenv.MustHaveGoRun(t)
-	if !platform.RaceDetectorSupported(runtime.GOOS, runtime.GOARCH) ||
-		!testenv.HasCGO() {
+	if !raceenabled.Enabled || !testenv.HasCGO() {
 		t.Skip("skipped due to lack of race detector support / CGO")
 	}
 
@@ -524,7 +522,7 @@ func TestIssue59563TruncatedCoverPkgAll(t *testing.T) {
 		// We're only interested in the specific function "large" for
 		// the testcase being built. See the #59563 for details on why
 		// size matters.
-		if !(strings.HasPrefix(f[0], "internal/coverage/cfile/testdata/issue59563/repro.go") && strings.Contains(line, "large")) {
+		if !(strings.HasPrefix(f[0], "github.com/tmc/covutil/internal/coverage/cfile/testdata/issue59563/repro.go") && strings.Contains(line, "large")) {
 			continue
 		}
 		nfound++
