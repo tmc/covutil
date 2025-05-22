@@ -1,0 +1,29 @@
+# Test covtree json command
+mkdir covdata
+cp $TESTDATA/sample_covmeta.bin covdata/covmeta.abc123
+cp $TESTDATA/sample_covcounters.bin covdata/covcounters.abc123.1234.5678
+
+# Test basic JSON output (will fail due to invalid coverage data but should show format)
+! exec covtree json -i=covdata
+stderr 'failed to load coverage data'
+
+# Test JSON with output file
+! exec covtree json -i=covdata -o=output.json
+stderr 'failed to load coverage data'
+
+# Test error cases
+! exec covtree json
+stderr 'must specify input directory'
+
+! exec covtree json -i=nonexistent
+stderr 'input directory does not exist'
+
+# Test with empty directory (should report no coverage data)
+mkdir empty
+! exec covtree json -i=empty
+stderr 'no coverage data found'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing

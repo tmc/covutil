@@ -1,0 +1,52 @@
+# Test covforest help commands
+exec covforest help
+stdout 'Covforest is a program for managing and analyzing multiple coverage trees'
+stdout 'add.*add a coverage tree to the forest'
+stdout 'list.*list all coverage trees in the forest'
+stdout 'summary.*show summary statistics across all trees'
+stdout 'serve.*start HTTP server for exploring the forest'
+stdout 'prune.*remove old or invalid coverage trees'
+stdout 'sync.*synchronize trees from remote sources'
+stdout 'Different machines.*CI/CD workers, developer machines'
+stdout 'Different repositories.*monorepo vs separate repos'
+stdout 'Different timelines.*historical data, continuous monitoring'
+
+# Test individual command help
+exec covforest help add
+stdout 'usage: covforest add'
+stdout 'Add processes a coverage directory'
+stdout '\-name flag specifies a human-readable name'
+stdout 'automatically detect git information'
+
+exec covforest help list
+stdout 'usage: covforest list'
+stdout 'List displays all coverage trees'
+stdout '\-format flag specifies the output format'
+
+exec covforest help summary
+stdout 'usage: covforest summary'
+stdout 'Summary displays aggregate statistics'
+
+exec covforest help serve
+stdout 'usage: covforest serve'
+stdout 'Serve starts an HTTP server'
+stdout 'interactive web interface'
+
+exec covforest help prune
+stdout 'usage: covforest prune'
+stdout 'Prune removes coverage trees'
+stdout '\-older-than flag specifies the age threshold'
+
+exec covforest help sync
+stdout 'usage: covforest sync'
+stdout 'Sync synchronizes coverage trees'
+stdout 'currently a placeholder'
+
+# Test unknown command help
+! exec covforest help unknown
+stderr 'Unknown help topic.*unknown'
+
+# Test help with no arguments
+exec covforest
+stderr 'Usage:'
+stderr 'covforest.*command.*arguments'

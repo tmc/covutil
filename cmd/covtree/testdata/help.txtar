@@ -1,0 +1,45 @@
+# Test covtree help commands
+exec covtree help
+stdout 'Covtree is a program for analyzing and visualizing Go coverage data'
+stdout 'percent.*report coverage percentages by package'
+stdout 'func.*report coverage percentages by function'
+stdout 'pkglist.*report list of packages with coverage data'
+stdout 'serve.*start HTTP server for interactive coverage exploration'
+stdout 'json.*convert coverage data to NDJSON format'
+stdout 'debug.*debug coverage directory scanning'
+
+# Test individual command help
+exec covtree help percent
+stdout 'usage: covtree percent'
+stdout 'Percent reports the coverage percentage'
+stdout 'recursively for coverage data'
+
+exec covtree help func
+stdout 'usage: covtree func'
+stdout 'Func reports the coverage percentage for each function'
+
+exec covtree help pkglist
+stdout 'usage: covtree pkglist'
+stdout 'Pkglist reports the import paths of packages'
+
+exec covtree help serve
+stdout 'usage: covtree serve'
+stdout 'Serve starts an HTTP server'
+
+exec covtree help json
+stdout 'usage: covtree json'
+stdout 'JSON converts coverage data to newline-delimited JSON'
+stdout '\-w flag enables watch mode'
+
+exec covtree help debug
+stdout 'usage: covtree debug'
+stdout 'Debug scans a directory for coverage data'
+
+# Test unknown command help
+! exec covtree help unknown
+stderr 'Unknown help topic.*unknown'
+
+# Test help with no arguments
+exec covtree
+stderr 'Usage:'
+stderr 'covtree.*command.*arguments'

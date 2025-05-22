@@ -1,0 +1,44 @@
+# Test covforest with custom forest file paths
+env HOME=$WORK
+
+# Create sample coverage data
+mkdir covdata
+cp $TESTDATA/sample_covmeta.bin covdata/covmeta.abc123
+cp $TESTDATA/sample_covcounters.bin covdata/covcounters.abc123.1234.5678
+
+# Test with custom forest file path
+exec covforest list -forest=custom.json
+stdout 'No coverage trees found'
+
+# Test adding with custom forest path (will fail due to invalid data)
+! exec covforest add -i=covdata -name="test-tree" -forest=custom.json
+stderr 'failed to load coverage data'
+
+# Test summary with custom forest path
+exec covforest summary -forest=custom.json
+stdout 'Trees: 0'
+
+# Test list with different formats and custom path
+exec covforest list -forest=custom.json -format=json
+stdout '{"trees":null,"count":0}'
+
+# Test prune with custom forest path
+exec covforest prune -forest=custom.json
+stdout 'No trees to prune'
+
+# Test forest file creation in subdirectory
+mkdir -p forests/test
+exec covforest list -forest=forests/test/my-forest.json
+stdout 'No coverage trees found'
+
+# Verify that commands respect forest path parameter across all commands
+exec covforest summary -forest=forests/test/my-forest.json
+stdout 'Trees: 0'
+
+exec covforest prune -forest=forests/test/my-forest.json
+stdout 'No trees to prune'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing

@@ -1,0 +1,62 @@
+# Test covtree commands with coverage data scenarios
+mkdir covdata
+cp $TESTDATA/sample_covmeta.bin covdata/covmeta.abc123
+cp $TESTDATA/sample_covcounters.bin covdata/covcounters.abc123.1234.5678
+
+# Test percent command (will fail with dummy data but tests argument parsing)
+! exec covtree percent -i=covdata
+stderr 'failed to load coverage data'
+
+# Test func command
+! exec covtree func -i=covdata
+stderr 'failed to load coverage data'
+
+# Test pkglist command  
+! exec covtree pkglist -i=covdata
+stderr 'failed to load coverage data'
+
+# Test with output file options
+! exec covtree percent -i=covdata -o=percent.out
+stderr 'failed to load coverage data'
+
+! exec covtree func -i=covdata -o=func.out
+stderr 'failed to load coverage data'
+
+! exec covtree pkglist -i=covdata -o=pkglist.out
+stderr 'failed to load coverage data'
+
+# Test error cases - missing input directory
+! exec covtree percent
+stderr 'must specify input directory'
+
+! exec covtree func
+stderr 'must specify input directory'
+
+! exec covtree pkglist
+stderr 'must specify input directory'
+
+# Test error cases - nonexistent directory
+! exec covtree percent -i=nonexistent
+stderr 'input directory does not exist'
+
+! exec covtree func -i=nonexistent
+stderr 'input directory does not exist'
+
+! exec covtree pkglist -i=nonexistent
+stderr 'input directory does not exist'
+
+# Test with empty directory
+mkdir empty
+! exec covtree percent -i=empty
+stderr 'no coverage data found'
+
+! exec covtree func -i=empty
+stderr 'no coverage data found'
+
+! exec covtree pkglist -i=empty
+stderr 'no coverage data found'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing

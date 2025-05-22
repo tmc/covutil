@@ -1,0 +1,72 @@
+# Test complete covforest lifecycle: add, list, summary, prune
+env HOME=$WORK
+
+# Create sample coverage data
+mkdir covdata1
+cp $TESTDATA/sample_covmeta.bin covdata1/covmeta.abc123
+cp $TESTDATA/sample_covcounters.bin covdata1/covcounters.abc123.1234.5678
+
+mkdir covdata2
+cp $TESTDATA/sample_covmeta.bin covdata2/covmeta.def456
+cp $TESTDATA/sample_covcounters.bin covdata2/covcounters.def456.1234.5678
+
+# Test initial list (should be empty)
+exec covforest list
+stdout 'No coverage trees found'
+
+# Test adding trees (will fail due to invalid coverage data but tests the workflow)
+! exec covforest add -i=covdata1 -name="test-tree-1" -machine="test-machine" -repo="test/repo" -branch="main"
+stderr 'failed to load coverage data'
+
+# Test error cases for add
+! exec covforest add
+stderr 'must specify input directory'
+
+! exec covforest add -i=covdata1
+stderr 'must specify tree name'
+
+! exec covforest add -i=nonexistent -name="test"
+stderr 'input directory does not exist'
+
+# Test list with different formats
+exec covforest list -format=table
+stdout 'No coverage trees found'
+
+exec covforest list -format=json
+stdout '{"trees":null,"count":0}'
+
+exec covforest list -format=csv
+stdout 'id,name,machine,repository,branch,commit,coverage_rate,total_lines,covered_lines,last_updated,created_at'
+
+# Test summary on empty forest
+exec covforest summary
+stdout 'Forest Summary'
+stdout 'Trees: 0'
+stdout 'Total Lines: 0'
+stdout 'Covered Lines: 0'
+stdout 'Coverage Rate: 0.00%'
+
+exec covforest summary -format=json
+stdout '"TreeCount":0'
+stdout '"TotalLines":0'
+stdout '"CoveredLines":0'
+
+# Test prune on empty forest
+exec covforest prune
+stdout 'No trees to prune'
+
+exec covforest prune -older-than=1h
+stdout 'No trees to prune'
+
+# Test prune with invalid duration
+! exec covforest prune -older-than=invalid
+stderr 'invalid duration format'
+
+# Test sync (should show not implemented message)
+! exec covforest sync
+stderr 'sync command is not yet implemented'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing

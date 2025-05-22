@@ -1,0 +1,41 @@
+# Test covtree debug command with sample coverage data
+mkdir covdata
+cp $TESTDATA/sample_covmeta.bin covdata/covmeta.abc123
+cp $TESTDATA/sample_covcounters.bin covdata/covcounters.abc123.1234.5678
+
+# Test debug scanning
+exec covtree debug -i=covdata
+stdout 'Found 1 coverage directories'
+stdout '1\. covdata'
+stdout 'covmeta\.abc123'
+stdout 'covcounters\.abc123'
+
+# Test debug with empty directory
+mkdir empty
+exec covtree debug -i=empty
+stdout 'Found 0 coverage directories'
+
+# Test debug with nested structure
+mkdir -p nested/subdir1/covdata1
+mkdir -p nested/subdir2/covdata2
+cp $TESTDATA/sample_covmeta.bin nested/subdir1/covdata1/covmeta.def456
+cp $TESTDATA/sample_covcounters.bin nested/subdir1/covdata1/covcounters.def456.1234.5678
+cp $TESTDATA/sample_covmeta.bin nested/subdir2/covdata2/covmeta.ghi789
+cp $TESTDATA/sample_covcounters.bin nested/subdir2/covdata2/covcounters.ghi789.1234.5678
+
+exec covtree debug -i=nested
+stdout 'Found 2 coverage directories'
+stdout 'nested/subdir1/covdata1'
+stdout 'nested/subdir2/covdata2'
+
+# Test error cases
+! exec covtree debug
+stderr 'must specify input directory'
+
+! exec covtree debug -i=nonexistent
+stderr 'input directory does not exist'
+
+-- sample_covmeta.bin --
+dummy meta file content for testing
+-- sample_covcounters.bin --
+dummy counter file content for testing
