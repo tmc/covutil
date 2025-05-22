@@ -7,10 +7,12 @@ package covutil
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -105,7 +107,21 @@ type Profile struct {
 // PkgFuncKey identifies a function within a package for counter lookup.
 type PkgFuncKey = coverage.PkgFuncKey
 
-// CoverageSet manages a collection of Pods.
+// PkgFuncKeyString returns a string representation of the PkgFuncKey.
+func PkgFuncKeyString(p PkgFuncKey) string {
+	return fmt.Sprintf("%s:%s", p.PkgPath, p.FuncName)
+}
+
+// CoverageSet manages a collection of Pods and implements fs.FS.
+// It presents coverage data as a Plan 9-style virtual filesystem where:
+//
+//	/pods/                      - All pods by ID
+//	/pods/<id>/metadata.json    - Pod metadata
+//	/pods/<id>/profile.json     - Coverage profile
+//	/by-label/<key>/<value>/    - Pods filtered by label
+//	/by-package/<path>/         - Data for specific package
+//	/functions/<pkg>/<func>/    - Individual function data
+//	/summary/                   - Aggregate summaries
 type CoverageSet struct {
 	Pods []*Pod
 	mu   sync.RWMutex
@@ -123,31 +139,82 @@ func LoadCounterFile(r io.Reader, filePath string) (*CounterFile, error) {
 	return coverage.ParseCounterFile(r, filePath)
 }
 
-// LoadCoverageSetFromFS scans an fs.FS for coverage files and loads them.
+// LoadOption configures coverage loading behavior
+type LoadOption func(*loadConfig)
+
+type loadConfig struct {
+	logger   *slog.Logger
+	maxDepth int
+}
+
+// WithLogger sets the logger for warnings and diagnostics
+func WithLogger(logger *slog.Logger) LoadOption {
+	return func(c *loadConfig) {
+		c.logger = logger
+	}
+}
+
+// WithMaxDepth sets the maximum directory depth to search (default: unlimited)
+func WithMaxDepth(depth int) LoadOption {
+	return func(c *loadConfig) {
+		c.maxDepth = depth
+	}
+}
+
+// LoadCoverageSet scans an fs.FS for coverage files and loads them.
 // It identifies groups of meta and counter files (internal pods) and
 // transforms them into public Pod structures containing Profiles.
-func LoadCoverageSetFromFS(fsys fs.FS, rootDir string) (*CoverageSet, error) {
+//
+// Use fs.Sub if you need to target a specific subdirectory:
+//
+//	subFS, _ := fs.Sub(os.DirFS("/path"), "covdata")
+//	set, _ := LoadCoverageSet(subFS, WithLogger(logger))
+//
+// For updates/refreshes, simply call this function again with the same
+// or updated filesystem - it will re-scan and return fresh data.
+func LoadCoverageSet(fsys fs.FS, opts ...LoadOption) (*CoverageSet, error) {
+	config := &loadConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	return loadCoverageSetFromFS(fsys, config)
+}
+
+func loadCoverageSetFromFS(fsys fs.FS, config *loadConfig) (*CoverageSet, error) {
 	var filePaths []string
-	err := fs.WalkDir(fsys, rootDir, func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() {
-			// Ensure path is relative to fsys root for Open
-			relPath := path
-			if rootDir != "." && strings.HasPrefix(path, rootDir) {
-				var errRel error
-				relPath, errRel = filepath.Rel(rootDir, path)
-				if errRel != nil {
-					return fmt.Errorf("calculating relative path for %s from %s: %w", path, rootDir, errRel)
-				}
+
+		// Check max depth
+		if config.maxDepth > 0 {
+			depth := strings.Count(path, "/")
+			if path != "." {
+				depth++ // Account for the file/dir itself
 			}
-			filePaths = append(filePaths, relPath)
+			if depth > config.maxDepth {
+				if d.IsDir() {
+					if config.logger != nil {
+						config.logger.Info("stopping at max depth",
+							"path", path,
+							"depth", depth,
+							"max_depth", config.maxDepth)
+					}
+					return fs.SkipDir
+				}
+				return nil
+			}
+		}
+
+		if !d.IsDir() {
+			filePaths = append(filePaths, path)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("walking directory %s in fsys: %w", rootDir, err)
+		return nil, fmt.Errorf("walking filesystem: %w", err)
 	}
 
 	internalPods := ipods.CollectPodsFromFiles(filePaths, false) // This needs careful path handling for FS
@@ -200,8 +267,16 @@ func LoadCoverageSetFromFS(fsys fs.FS, rootDir string) (*CoverageSet, error) {
 			}
 
 			if !bytes.Equal(parsedCounterFile.MetaFileHash[:], parsedMetaFile.FileHash[:]) {
-				fmt.Fprintf(os.Stderr, "warning: counter file %s meta hash %x mismatches %x for meta %s\n",
-					counterFSPath, parsedCounterFile.MetaFileHash, parsedMetaFile.FileHash, metaFSPath)
+				if config.logger != nil {
+					config.logger.Warn("counter file meta hash mismatch",
+						"counter_file", counterFSPath,
+						"counter_hash", fmt.Sprintf("%x", parsedCounterFile.MetaFileHash),
+						"meta_hash", fmt.Sprintf("%x", parsedMetaFile.FileHash),
+						"meta_file", metaFSPath)
+				} else {
+					fmt.Fprintf(os.Stderr, "warning: counter file %s meta hash %x mismatches %x for meta %s\n",
+						counterFSPath, parsedCounterFile.MetaFileHash, parsedMetaFile.FileHash, metaFSPath)
+				}
 				continue
 			}
 			counterFileCount++
@@ -516,6 +591,728 @@ func sourceInfoClone(original *SourceInfo) *SourceInfo {
 	return &cloned
 }
 
+// --- fs.FS Implementation ---
+
+// Open implements fs.FS.Open with Plan 9-style path-based filtering.
+func (cs *CoverageSet) Open(name string) (fs.File, error) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+	}
+
+	if name == "." {
+		return &plan9Root{cs: cs}, nil
+	}
+
+	parts := strings.Split(name, "/")
+	if len(parts) == 0 {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+
+	switch parts[0] {
+	case "pods":
+		return cs.openPodsPath(parts[1:], name)
+	case "by-label":
+		return cs.openByLabelPath(parts[1:], name)
+	case "by-package":
+		return cs.openByPackagePath(parts[1:], name)
+	case "functions":
+		return cs.openFunctionsPath(parts[1:], name)
+	case "summary":
+		return cs.openSummaryPath(parts[1:], name)
+	default:
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+}
+
+func (cs *CoverageSet) openPodFile(pod *Pod, fileName, fullPath string) (fs.File, error) {
+	switch fileName {
+	case "metadata.json":
+		data, err := cs.generatePodMetadata(pod)
+		if err != nil {
+			return nil, &fs.PathError{Op: "open", Path: fullPath, Err: err}
+		}
+		return &memoryFile{
+			name: fileName,
+			data: data,
+		}, nil
+
+	case "profile.json":
+		data, err := cs.generateProfileJSON(pod)
+		if err != nil {
+			return nil, &fs.PathError{Op: "open", Path: fullPath, Err: err}
+		}
+		return &memoryFile{
+			name: fileName,
+			data: data,
+		}, nil
+
+	default:
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+}
+
+func (cs *CoverageSet) generatePodMetadata(pod *Pod) ([]byte, error) {
+	metadata := map[string]interface{}{
+		"id":        pod.ID,
+		"labels":    pod.Labels,
+		"timestamp": pod.Timestamp,
+		"source":    pod.Source,
+		"links":     pod.Links,
+	}
+
+	if len(pod.SubPods) > 0 {
+		subPodIDs := make([]string, len(pod.SubPods))
+		for i, subPod := range pod.SubPods {
+			subPodIDs[i] = subPod.ID
+		}
+		metadata["sub_pods"] = subPodIDs
+	}
+
+	return json.MarshalIndent(metadata, "", "  ")
+}
+
+func (cs *CoverageSet) generateProfileJSON(pod *Pod) ([]byte, error) {
+	if pod.Profile == nil {
+		return []byte("null"), nil
+	}
+
+	// Convert counters map to JSON-friendly format with string keys
+	jsonCounters := make(map[string][]uint32)
+	for key, counts := range pod.Profile.Counters {
+		jsonCounters[fmt.Sprintf("%s:%s", key.PkgPath, key.FuncName)] = counts
+	}
+
+	profile := map[string]interface{}{
+		"meta":     pod.Profile.Meta,
+		"counters": jsonCounters, // Now JSON serializable with string keys
+		"args":     pod.Profile.Args,
+	}
+
+	return json.MarshalIndent(profile, "", "  ")
+}
+
+func (cs *CoverageSet) openPodsPath(parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		// /pods/ - list all pods
+		return &virtualDir{
+			name:    "pods",
+			entries: cs.getPodEntries(),
+		}, nil
+	}
+
+	// /pods/<id>/... - specific pod
+	podID := parts[0]
+	var targetPod *Pod
+	for _, pod := range cs.Pods {
+		if pod.ID == podID {
+			targetPod = pod
+			break
+		}
+	}
+
+	if targetPod == nil {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+
+	if len(parts) == 1 {
+		// /pods/<id>/ - pod directory
+		return &podDir{name: podID, pod: targetPod}, nil
+	}
+
+	// /pods/<id>/<file>
+	return cs.openPodFile(targetPod, parts[1], fullPath)
+}
+
+func (cs *CoverageSet) openByLabelPath(parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		// /by-label/ - list all label keys
+		return &virtualDir{
+			name:    "by-label",
+			entries: cs.getLabelKeys(),
+		}, nil
+	}
+
+	if len(parts) == 1 {
+		// /by-label/<key>/ - list values for this key
+		return &virtualDir{
+			name:    parts[0],
+			entries: cs.getLabelValues(parts[0]),
+		}, nil
+	}
+
+	// /by-label/<key>/<value>/ - pods with this label
+	key, value := parts[0], parts[1]
+	filteredPods := cs.filterPodsByLabel(key, value)
+
+	if len(parts) == 2 {
+		return &virtualDir{
+			name:    value,
+			entries: podEntries(filteredPods),
+		}, nil
+	}
+
+	// /by-label/<key>/<value>/<podid>/...
+	return cs.openFilteredPodPath(filteredPods, parts[2:], fullPath)
+}
+
+func (cs *CoverageSet) openByPackagePath(parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		// /by-package/ - list all packages
+		return &virtualDir{
+			name:    "by-package",
+			entries: cs.getPackageEntries(),
+		}, nil
+	}
+
+	// For by-package, we need to handle the fact that package paths contain slashes
+	// We'll look for an exact match against known packages
+	allPackages := cs.getAllPackagePaths()
+
+	// Try progressively longer package paths
+	var pkgPath string
+	var remainingParts []string
+
+	for i := 1; i <= len(parts); i++ {
+		candidatePkgPath := strings.Join(parts[:i], "/")
+		for _, pkg := range allPackages {
+			if pkg == candidatePkgPath {
+				pkgPath = candidatePkgPath
+				remainingParts = parts[i:]
+				break
+			}
+		}
+		if pkgPath != "" {
+			break
+		}
+	}
+
+	if pkgPath == "" {
+		// No valid package path found
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+
+	// Filter pods by this exact package
+	filteredSet, err := cs.FilterByPath(pkgPath)
+	if err != nil {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: err}
+	}
+
+	if len(remainingParts) == 0 {
+		// /by-package/<pkg-path>/ - pods containing this package
+		return &virtualDir{
+			name:    pkgPath,
+			entries: podEntries(filteredSet.Pods),
+		}, nil
+	}
+
+	// /by-package/<pkg-path>/<podid>/...
+	return cs.openFilteredPodPath(filteredSet.Pods, remainingParts, fullPath)
+}
+
+func (cs *CoverageSet) openFunctionsPath(parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		// /functions/ - list all packages with functions
+		return &virtualDir{
+			name:    "functions",
+			entries: cs.getPackageEntries(),
+		}, nil
+	}
+
+	// Try to find a valid package path - package paths can contain slashes
+	allPackages := cs.getAllPackagePaths()
+	var pkgPath string
+	var functionName string
+
+	// Try progressively longer package paths
+	for i := 1; i <= len(parts); i++ {
+		candidatePkgPath := strings.Join(parts[:i], "/")
+		for _, pkg := range allPackages {
+			if pkg == candidatePkgPath {
+				pkgPath = candidatePkgPath
+				if i < len(parts) {
+					// Remove .json extension from function name if present
+					functionName = strings.TrimSuffix(parts[i], ".json")
+				}
+				break
+			}
+		}
+		if pkgPath != "" {
+			break
+		}
+	}
+
+	if pkgPath == "" {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+
+	if functionName == "" {
+		// /functions/<pkg-path>/ - list functions in package
+		return &virtualDir{
+			name:    pkgPath,
+			entries: cs.getFunctionEntries(pkgPath),
+		}, nil
+	}
+
+	// /functions/<pkg-path>/<func-name> - function data
+	data, err := cs.generateFunctionJSON(pkgPath, functionName)
+	if err != nil {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: err}
+	}
+	return &memoryFile{
+		name: functionName + ".json",
+		data: data,
+	}, nil
+}
+
+func (cs *CoverageSet) openSummaryPath(parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		// /summary/ - aggregate summary
+		data, err := cs.generateSummaryJSON()
+		if err != nil {
+			return nil, &fs.PathError{Op: "open", Path: fullPath, Err: err}
+		}
+		return &memoryFile{name: "summary", data: data}, nil
+	}
+	return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+}
+
+func (cs *CoverageSet) openFilteredPodPath(pods []*Pod, parts []string, fullPath string) (fs.File, error) {
+	if len(parts) == 0 {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+
+	podID := parts[0]
+	var targetPod *Pod
+	for _, pod := range pods {
+		if pod.ID == podID {
+			targetPod = pod
+			break
+		}
+	}
+
+	if targetPod == nil {
+		return nil, &fs.PathError{Op: "open", Path: fullPath, Err: fs.ErrNotExist}
+	}
+
+	if len(parts) == 1 {
+		return &podDir{name: podID, pod: targetPod}, nil
+	}
+
+	return cs.openPodFile(targetPod, parts[1], fullPath)
+}
+
+// Helper functions for Plan 9-style navigation
+
+func (cs *CoverageSet) getPodEntries() []fs.DirEntry {
+	entries := make([]fs.DirEntry, len(cs.Pods))
+	for i, pod := range cs.Pods {
+		entries[i] = &podDirEntry{name: pod.ID}
+	}
+	return entries
+}
+
+func (cs *CoverageSet) getLabelKeys() []fs.DirEntry {
+	keys := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		for key := range pod.Labels {
+			keys[key] = true
+		}
+	}
+
+	var entries []fs.DirEntry
+	for key := range keys {
+		entries = append(entries, &podDirEntry{name: key})
+	}
+	return entries
+}
+
+func (cs *CoverageSet) getLabelValues(key string) []fs.DirEntry {
+	values := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		if value, ok := pod.Labels[key]; ok {
+			values[value] = true
+		}
+	}
+
+	var entries []fs.DirEntry
+	for value := range values {
+		entries = append(entries, &podDirEntry{name: value})
+	}
+	return entries
+}
+
+func (cs *CoverageSet) filterPodsByLabel(key, value string) []*Pod {
+	var filtered []*Pod
+	for _, pod := range cs.Pods {
+		if podValue, ok := pod.Labels[key]; ok && podValue == value {
+			filtered = append(filtered, pod)
+		}
+	}
+	return filtered
+}
+
+func (cs *CoverageSet) generateSummaryJSON() ([]byte, error) {
+	summary := map[string]interface{}{
+		"total_pods":      len(cs.Pods),
+		"total_packages":  cs.countTotalPackages(),
+		"total_functions": cs.countTotalFunctions(),
+		"label_keys":      cs.getAllLabelKeys(),
+	}
+
+	return json.MarshalIndent(summary, "", "  ")
+}
+
+func (cs *CoverageSet) countTotalPackages() int {
+	packages := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for _, pkg := range pod.Profile.Meta.Packages {
+				packages[pkg.Path] = true
+			}
+		}
+	}
+	return len(packages)
+}
+
+func (cs *CoverageSet) countTotalFunctions() int {
+	functions := make(map[PkgFuncKey]bool)
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for key := range pod.Profile.Counters {
+				functions[key] = true
+			}
+		}
+	}
+	return len(functions)
+}
+
+func (cs *CoverageSet) getAllLabelKeys() []string {
+	keys := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		for key := range pod.Labels {
+			keys[key] = true
+		}
+	}
+
+	var result []string
+	for key := range keys {
+		result = append(result, key)
+	}
+	return result
+}
+
+func podEntries(pods []*Pod) []fs.DirEntry {
+	entries := make([]fs.DirEntry, len(pods))
+	for i, pod := range pods {
+		entries[i] = &podDirEntry{name: pod.ID}
+	}
+	return entries
+}
+
+func (cs *CoverageSet) getPackageEntries() []fs.DirEntry {
+	packages := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for _, pkg := range pod.Profile.Meta.Packages {
+				packages[pkg.Path] = true
+			}
+		}
+	}
+
+	var entries []fs.DirEntry
+	for pkgPath := range packages {
+		entries = append(entries, &podDirEntry{name: pkgPath})
+	}
+	return entries
+}
+
+func (cs *CoverageSet) getFunctionEntries(pkgPath string) []fs.DirEntry {
+	functions := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for _, pkg := range pod.Profile.Meta.Packages {
+				if pkg.Path == pkgPath {
+					for _, fn := range pkg.Functions {
+						functions[fn.FuncName] = true
+					}
+				}
+			}
+		}
+	}
+
+	var entries []fs.DirEntry
+	for funcName := range functions {
+		entries = append(entries, &fileEntry{name: funcName + ".json"})
+	}
+	return entries
+}
+
+func (cs *CoverageSet) generateFunctionJSON(pkgPath, funcName string) ([]byte, error) {
+	key := PkgFuncKey{PkgPath: pkgPath, FuncName: funcName}
+
+	functionData := map[string]interface{}{
+		"package":  pkgPath,
+		"function": funcName,
+		"key":      key, // This will be JSON serialized with struct tags
+		"coverage": make(map[string][]uint32),
+	}
+
+	// Collect coverage data from all pods
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			if counters, ok := pod.Profile.Counters[key]; ok {
+				functionData["coverage"].(map[string][]uint32)[pod.ID] = counters
+			}
+		}
+	}
+
+	return json.MarshalIndent(functionData, "", "  ")
+}
+
+func (cs *CoverageSet) hasPackage(pkgPath string) bool {
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for _, pkg := range pod.Profile.Meta.Packages {
+				if pkg.Path == pkgPath {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (cs *CoverageSet) getAllPackagePaths() []string {
+	packages := make(map[string]bool)
+	for _, pod := range cs.Pods {
+		if pod.Profile != nil {
+			for _, pkg := range pod.Profile.Meta.Packages {
+				packages[pkg.Path] = true
+			}
+		}
+	}
+
+	var result []string
+	for pkg := range packages {
+		result = append(result, pkg)
+	}
+	return result
+}
+
+// Plan 9-style root directory
+type plan9Root struct {
+	cs *CoverageSet
+}
+
+func (r *plan9Root) Stat() (fs.FileInfo, error) {
+	return &dirInfo{name: "."}, nil
+}
+
+func (r *plan9Root) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: ".", Err: fs.ErrInvalid}
+}
+
+func (r *plan9Root) Close() error {
+	return nil
+}
+
+func (r *plan9Root) ReadDir(n int) ([]fs.DirEntry, error) {
+	entries := []fs.DirEntry{
+		&podDirEntry{name: "pods"},
+		&podDirEntry{name: "by-label"},
+		&podDirEntry{name: "by-package"},
+		&podDirEntry{name: "functions"},
+		&podDirEntry{name: "summary"},
+	}
+
+	if n < 0 {
+		return entries, nil
+	}
+	if n > len(entries) {
+		n = len(entries)
+	}
+	return entries[:n], nil
+}
+
+// Generic virtual directory
+type virtualDir struct {
+	name    string
+	entries []fs.DirEntry
+}
+
+func (d *virtualDir) Stat() (fs.FileInfo, error) {
+	return &dirInfo{name: d.name}, nil
+}
+
+func (d *virtualDir) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: d.name, Err: fs.ErrInvalid}
+}
+
+func (d *virtualDir) Close() error {
+	return nil
+}
+
+func (d *virtualDir) ReadDir(n int) ([]fs.DirEntry, error) {
+	if n < 0 {
+		return d.entries, nil
+	}
+	if n > len(d.entries) {
+		n = len(d.entries)
+	}
+	return d.entries[:n], nil
+}
+
+// coverageDir represents the root directory or a pod directory
+type coverageDir struct {
+	name string
+	pods []*Pod
+}
+
+func (d *coverageDir) Stat() (fs.FileInfo, error) {
+	return &dirInfo{name: d.name}, nil
+}
+
+func (d *coverageDir) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: d.name, Err: fs.ErrInvalid}
+}
+
+func (d *coverageDir) Close() error {
+	return nil
+}
+
+// ReadDir implements fs.ReadDirFile
+func (d *coverageDir) ReadDir(n int) ([]fs.DirEntry, error) {
+	var entries []fs.DirEntry
+
+	for _, pod := range d.pods {
+		entries = append(entries, &podDirEntry{
+			name: pod.ID,
+		})
+	}
+
+	if n < 0 {
+		return entries, nil
+	}
+
+	if n > len(entries) {
+		n = len(entries)
+	}
+
+	return entries[:n], nil
+}
+
+// podDir represents a single pod directory
+type podDir struct {
+	name string
+	pod  *Pod
+}
+
+func (d *podDir) Stat() (fs.FileInfo, error) {
+	return &dirInfo{name: d.name}, nil
+}
+
+func (d *podDir) Read([]byte) (int, error) {
+	return 0, &fs.PathError{Op: "read", Path: d.name, Err: fs.ErrInvalid}
+}
+
+func (d *podDir) Close() error {
+	return nil
+}
+
+// ReadDir implements fs.ReadDirFile
+func (d *podDir) ReadDir(n int) ([]fs.DirEntry, error) {
+	entries := []fs.DirEntry{
+		&fileEntry{name: "metadata.json"},
+		&fileEntry{name: "profile.json"},
+	}
+
+	if n < 0 {
+		return entries, nil
+	}
+
+	if n > len(entries) {
+		n = len(entries)
+	}
+
+	return entries[:n], nil
+}
+
+// memoryFile represents a virtual file with in-memory content
+type memoryFile struct {
+	name string
+	data []byte
+	pos  int64
+}
+
+func (f *memoryFile) Stat() (fs.FileInfo, error) {
+	return &fileInfo{
+		name: f.name,
+		size: int64(len(f.data)),
+	}, nil
+}
+
+func (f *memoryFile) Read(b []byte) (int, error) {
+	if f.pos >= int64(len(f.data)) {
+		return 0, io.EOF
+	}
+
+	n := copy(b, f.data[f.pos:])
+	f.pos += int64(n)
+	return n, nil
+}
+
+func (f *memoryFile) Close() error {
+	return nil
+}
+
+// Supporting types for fs.FileInfo and fs.DirEntry
+
+type dirInfo struct {
+	name string
+}
+
+func (d *dirInfo) Name() string       { return d.name }
+func (d *dirInfo) Size() int64        { return 0 }
+func (d *dirInfo) Mode() fs.FileMode  { return fs.ModeDir | 0755 }
+func (d *dirInfo) ModTime() time.Time { return time.Time{} }
+func (d *dirInfo) IsDir() bool        { return true }
+func (d *dirInfo) Sys() interface{}   { return nil }
+
+type fileInfo struct {
+	name string
+	size int64
+}
+
+func (f *fileInfo) Name() string       { return f.name }
+func (f *fileInfo) Size() int64        { return f.size }
+func (f *fileInfo) Mode() fs.FileMode  { return 0644 }
+func (f *fileInfo) ModTime() time.Time { return time.Time{} }
+func (f *fileInfo) IsDir() bool        { return false }
+func (f *fileInfo) Sys() interface{}   { return nil }
+
+type podDirEntry struct {
+	name string
+}
+
+func (e *podDirEntry) Name() string               { return e.name }
+func (e *podDirEntry) IsDir() bool                { return true }
+func (e *podDirEntry) Type() fs.FileMode          { return fs.ModeDir }
+func (e *podDirEntry) Info() (fs.FileInfo, error) { return &dirInfo{name: e.name}, nil }
+
+type fileEntry struct {
+	name string
+}
+
+func (e *fileEntry) Name() string      { return e.name }
+func (e *fileEntry) IsDir() bool       { return false }
+func (e *fileEntry) Type() fs.FileMode { return 0 }
+func (e *fileEntry) Info() (fs.FileInfo, error) {
+	return &fileInfo{name: e.name, size: 0}, nil
+}
+
 // --- Profile Operations (helpers and main operations) ---
 // (MergeProfiles, IntersectProfiles, SubtractProfile, copyProfile, checkCompatibility as before)
 // Ensure filterProfileByPath from previous response is also included here.
@@ -787,18 +1584,50 @@ func WriteProfileToDirectory(dirPath string, p *Profile) error {
 		return fmt.Errorf("creating directory %s: %w", dirPath, err)
 	}
 
-	// Write meta file
+	// Write meta file - try to copy existing file first, then fallback to custom format
 	metaFileName := fmt.Sprintf("covmeta.%x", p.Meta.FileHash)
 	metaPath := filepath.Join(dirPath, metaFileName)
-	metaFile, err := os.Create(metaPath)
-	if err != nil {
-		return fmt.Errorf("creating meta file %s: %w", metaPath, err)
-	}
-	defer metaFile.Close()
 
-	// For now, we can't easily recreate the original meta file format
-	// This is a placeholder that would need proper implementation
-	fmt.Fprintf(metaFile, "# Meta file for %s\n", p.Meta.FilePath)
+	// Try to find existing meta file to copy
+	existingMetaPath := ""
+	if p.Meta.FilePath != "" {
+		// Check if original meta file exists in covdata_simple
+		candidatePath := filepath.Join("covdata_simple", metaFileName)
+		if _, err := os.Stat(candidatePath); err == nil {
+			existingMetaPath = candidatePath
+		}
+	}
+
+	if existingMetaPath != "" {
+		// Copy existing binary meta file
+		sourceFile, err := os.Open(existingMetaPath)
+		if err != nil {
+			return fmt.Errorf("opening existing meta file %s: %w", existingMetaPath, err)
+		}
+		defer sourceFile.Close()
+
+		destFile, err := os.Create(metaPath)
+		if err != nil {
+			return fmt.Errorf("creating meta file %s: %w", metaPath, err)
+		}
+		defer destFile.Close()
+
+		if _, err := io.Copy(destFile, sourceFile); err != nil {
+			return fmt.Errorf("copying meta file: %w", err)
+		}
+	} else {
+		// Fallback to custom binary format for synthetic data
+		metaFile, err := os.Create(metaPath)
+		if err != nil {
+			return fmt.Errorf("creating meta file %s: %w", metaPath, err)
+		}
+		defer metaFile.Close()
+
+		// Write proper binary meta file format
+		if err := writeBinaryMetaFile(metaFile, &p.Meta); err != nil {
+			return fmt.Errorf("writing binary meta file: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -862,3 +1691,98 @@ func WriteCoverageSetToDirectory(baseDirPath string, set *CoverageSet) error {
 func WriteMetaFileContent(w io.Writer) error    { return icfile.WriteMeta(w) }
 func WriteCounterFileContent(w io.Writer) error { return icfile.WriteCounters(w) }
 func ClearCoverageCounters() error              { return icfile.ClearCounters() }
+
+// writeBinaryMetaFile writes a MetaFile to a writer in Go's binary covmeta format
+func writeBinaryMetaFile(w io.Writer, meta *MetaFile) error {
+	// Write magic number (matches Go's internal format)
+	if err := binary.Write(w, binary.LittleEndian, [4]byte{0, 'c', 'v', 'm'}); err != nil {
+		return err
+	}
+
+	// Write version
+	if err := binary.Write(w, binary.LittleEndian, uint32(1)); err != nil {
+		return err
+	}
+
+	// Write file hash
+	if err := binary.Write(w, binary.LittleEndian, meta.FileHash); err != nil {
+		return err
+	}
+
+	// Write mode and granularity
+	if err := binary.Write(w, binary.LittleEndian, uint8(meta.Mode)); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint8(meta.Granularity)); err != nil {
+		return err
+	}
+
+	// Write number of packages
+	if err := binary.Write(w, binary.LittleEndian, uint32(len(meta.Packages))); err != nil {
+		return err
+	}
+
+	// Write each package
+	for _, pkg := range meta.Packages {
+		// Write package path length and path
+		pathBytes := []byte(pkg.Path)
+		if err := binary.Write(w, binary.LittleEndian, uint32(len(pathBytes))); err != nil {
+			return err
+		}
+		if _, err := w.Write(pathBytes); err != nil {
+			return err
+		}
+
+		// Write number of functions
+		if err := binary.Write(w, binary.LittleEndian, uint32(len(pkg.Functions))); err != nil {
+			return err
+		}
+
+		// Write each function
+		for _, fn := range pkg.Functions {
+			// Write function name length and name
+			nameBytes := []byte(fn.FuncName)
+			if err := binary.Write(w, binary.LittleEndian, uint32(len(nameBytes))); err != nil {
+				return err
+			}
+			if _, err := w.Write(nameBytes); err != nil {
+				return err
+			}
+
+			// Write source file length and file
+			srcBytes := []byte(fn.SrcFile)
+			if err := binary.Write(w, binary.LittleEndian, uint32(len(srcBytes))); err != nil {
+				return err
+			}
+			if _, err := w.Write(srcBytes); err != nil {
+				return err
+			}
+
+			// Write number of units
+			if err := binary.Write(w, binary.LittleEndian, uint32(len(fn.Units))); err != nil {
+				return err
+			}
+
+			// Write each unit
+			for _, unit := range fn.Units {
+				if err := binary.Write(w, binary.LittleEndian, unit.StartLine); err != nil {
+					return err
+				}
+				if err := binary.Write(w, binary.LittleEndian, unit.StartCol); err != nil {
+					return err
+				}
+				if err := binary.Write(w, binary.LittleEndian, unit.EndLine); err != nil {
+					return err
+				}
+				if err := binary.Write(w, binary.LittleEndian, unit.EndCol); err != nil {
+					return err
+				}
+				if err := binary.Write(w, binary.LittleEndian, unit.NumStmt); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}

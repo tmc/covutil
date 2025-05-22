@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"unsafe"
 )
 
 // Package path constant
@@ -212,9 +214,9 @@ func ParseCounterFile(r io.Reader, filePath string) (*CounterFile, error) {
 		return nil, fmt.Errorf("initializing internal counter data reader for %s: %w", filePath, err)
 	}
 
-	// We need to extract the meta hash from the counter data reader
-	// For now, we'll use a zero hash since the field is not exported
-	var metaHash [16]byte
+	// Extract the meta hash from the counter data reader header
+	// The counter data reader has already parsed the header which contains the MetaHash
+	metaHash := getMetaHashFromCounterReader(cdr)
 
 	cf := &CounterFile{
 		FilePath:     filePath,
@@ -369,4 +371,29 @@ func AddProfileToFormatter(f FormatterAPI, meta *MetaFile, counters map[PkgFuncK
 		}
 	}
 	return nil
+}
+
+// getMetaHashFromCounterReader extracts the MetaHash from the CounterDataReader's header field
+// using reflection since the header field is not exported
+func getMetaHashFromCounterReader(cdr *idecodecounter.CounterDataReader) [16]byte {
+	// Use reflection to access the unexported hdr field
+	v := reflect.ValueOf(cdr).Elem()
+	hdrField := v.FieldByName("hdr")
+
+	if !hdrField.IsValid() {
+		// If we can't find the field, return zero hash
+		return [16]byte{}
+	}
+
+	// Get the MetaHash field from the header
+	metaHashField := hdrField.FieldByName("MetaHash")
+	if !metaHashField.IsValid() {
+		return [16]byte{}
+	}
+
+	// Convert to [16]byte - we need to use unsafe to access unexported fields
+	headerPtr := unsafe.Pointer(hdrField.UnsafeAddr())
+	header := (*icoverage.CounterFileHeader)(headerPtr)
+
+	return header.MetaHash
 }
