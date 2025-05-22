@@ -1,0 +1,52 @@
+# Test basic usage of covzero command
+
+# Create test coverage delta directory structure
+mkdir coverage
+mkdir coverage/delta
+
+# Create sample delta coverage files with different coverage levels
+-- coverage/delta/TestSprigScript-zero-coverage.txt.delta.covtxt --
+mode: atomic
+
+-- coverage/delta/TestSprigScript-minimal-coverage.txt.delta.covtxt --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+
+-- coverage/delta/TestSprigScript-good-coverage.txt.delta.covtxt --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 5
+github.com/example/test/main.go:9.13,11.2 1 3
+github.com/example/test/utils.go:3.14,5.2 1 2
+
+# Create a contribution summary file
+-- coverage/delta/contribution-summary.txt --
+TestSprigScript/zero-coverage.txt: 0.00% additional coverage
+TestSprigScript/minimal-coverage.txt: 0.05% additional coverage
+TestSprigScript/good-coverage.txt: 5.25% additional coverage
+
+# Test covzero with default settings
+covzero
+stdout 'Coverage Analysis Summary'
+stdout 'Tests with NO coverage contribution:'
+stdout 'Tests with MINIMAL coverage contribution'
+
+# Test with custom threshold
+covzero -threshold=1.0
+stdout 'Coverage Analysis Summary'
+
+# Test with custom output file
+covzero -output custom-report.txt
+stdout 'Report written to: custom-report.txt'
+exists custom-report.txt
+
+# Test with skip summary flag
+covzero -skip-summary
+stdout 'Coverage Analysis Summary'
+
+# Test with verbose flag
+covzero -verbose
+stdout 'Coverage Analysis Summary'
+
+# Test with non-existent delta directory
+! covzero -delta-dir nonexistent
+stderr 'Error:'

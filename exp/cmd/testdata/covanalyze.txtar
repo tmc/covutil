@@ -1,0 +1,39 @@
+# Test basic usage of covanalyze command
+
+# Test help
+covanalyze -help
+stdout 'Sprig Coverage Analysis Tools'
+stdout 'Usage: covanalyze'
+stdout 'Examples:'
+
+# Test with no arguments (should show help)
+covanalyze
+stdout 'Sprig Coverage Analysis Tools'
+
+# Test compare flag
+! covanalyze -compare
+stderr 'Error running command'
+
+# Test analyze flag  
+! covanalyze -analyze
+stderr 'Error running command'
+
+# Test pattern flag
+! covanalyze -pattern crypto
+stderr 'Error running command'
+
+# Test missing flag
+! covanalyze -missing
+stderr 'Error running command'
+
+# Test uncovered flag
+! covanalyze -uncovered
+stderr 'Error running command'
+
+# Test top-tests flag
+! covanalyze -top-tests
+stderr 'Error running command'
+
+# Test go implementation flag (should fail as not implemented)
+! covanalyze -go -compare
+stderr 'Go implementation not yet available'

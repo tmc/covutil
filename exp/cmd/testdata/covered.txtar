@@ -1,0 +1,46 @@
+# Test basic usage of covered command
+
+# Create a test Go source file
+-- main.go --
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, world!")
+}
+
+func uncoveredFunc() {
+	fmt.Println("This is not covered")
+}
+
+# Create a test coverage profile
+-- cover.out --
+mode: atomic
+main.go:6.13,8.2 1 1
+main.go:10.20,12.2 1 0
+
+# Test covered with basic coverage file
+covered cover.out
+stdout '-- main.go'
+stdout 'covered'
+
+# Test with specific coverage file flag
+covered -c cover.out
+stdout '-- main.go'
+
+# Test with non-existent file
+! covered nonexistent.out
+stderr 'parsing coverage profile:'
+
+# Test with color mode
+covered -color=never cover.out
+stdout '-- main.go'
+
+# Test with path filter
+covered -path="main" cover.out
+stdout '-- main.go'
+
+# Test help
+! covered -h
+stderr 'usage: covered'

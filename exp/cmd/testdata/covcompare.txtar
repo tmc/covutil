@@ -1,0 +1,26 @@
+# Test basic usage of covcompare command
+
+# Create test coverage files
+-- legacy.out --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+github.com/example/test/main.go:9.13,11.2 1 1
+github.com/example/test/utils.go:3.14,5.2 1 1
+
+-- scripttest.out --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+github.com/example/test/utils.go:3.14,5.2 1 0
+
+# Test help
+covcompare -help
+stdout 'Compare coverage between legacy and scripttest tests'
+stdout 'Usage: covcompare'
+
+# Test with existing coverage files
+! covcompare -legacy legacy.out -scripttest scripttest.out -diff-dir testdiff
+stderr 'Error'
+
+# Test with non-existent files (should try to generate)
+! covcompare -legacy nonexistent1.out -scripttest nonexistent2.out
+stderr 'Error generating'

@@ -1,0 +1,26 @@
+# Test basic usage of covdiff command
+
+# Create test coverage files
+-- profile1.out --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+github.com/example/test/main.go:9.13,11.2 1 0
+github.com/example/test/utils.go:3.14,5.2 1 1
+
+-- profile2.out --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+github.com/example/test/utils.go:3.14,5.2 1 1
+
+# Test covdiff with two coverage profiles
+! covdiff profile1.out profile2.out
+stderr 'Coverage Statistics:'
+stderr 'Coverage Gap:'
+
+# Test with missing arguments
+! covdiff
+stdout 'Usage: go run coverage-diff.go <profile1> <profile2>'
+
+# Test with non-existent file (should try to generate)
+! covdiff nonexistent1.out nonexistent2.out
+stderr 'Error generating legacy coverage profile:'

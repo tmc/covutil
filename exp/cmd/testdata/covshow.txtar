@@ -1,0 +1,43 @@
+# Test basic usage of covshow command
+
+# Create a test Go project structure
+exec git init .
+
+# Create a test Go source file
+-- main.go --
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, world!")
+}
+
+func testFunction() {
+	fmt.Println("This is a test function")
+	for i := 0; i < 10; i++ {
+		fmt.Printf("Count: %d\n", i)
+	}
+}
+
+# Create coverage directory structure
+mkdir coverage
+mkdir coverage/scripttest
+
+# Create a dummy coverage file
+-- coverage/scripttest/scriptest-merged.covtxt --
+mode: atomic
+main.go:6.13,8.2 1 1
+main.go:10.18,15.2 1 0
+
+# Test covshow with function name
+! covshow -func=testFunction
+stdout 'Found function testFunction'
+
+# Test with missing function name
+! covshow
+stdout 'Usage:'
+
+# Test with non-existent function
+! covshow -func=nonexistentFunction
+stderr 'Error finding function:'

@@ -1,0 +1,38 @@
+# Test basic usage of covdup command
+
+# Create test coverage delta directory structure
+mkdir coverage
+mkdir coverage/delta
+
+# Create sample delta coverage files
+-- coverage/delta/TestSprigScript-test1.txt.delta.covtxt --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+github.com/example/test/main.go:9.13,11.2 1 0
+
+-- coverage/delta/TestSprigScript-test2.txt.delta.covtxt --
+mode: atomic
+github.com/example/test/main.go:5.13,7.2 1 1
+
+-- coverage/delta/TestSprigScript-test3.txt.delta.covtxt --
+mode: atomic
+github.com/example/test/utils.go:3.14,5.2 1 1
+
+# Test covdup with default settings
+covdup
+stdout 'Redundant Test Analysis Summary'
+stdout 'Total tests analyzed:'
+
+# Test with custom output file
+covdup -output custom-report.txt
+stdout 'Report written to: custom-report.txt'
+exists custom-report.txt
+
+# Test with verbose flag
+covdup -verbose
+stdout 'Processing'
+stdout 'test coverage files'
+
+# Test with non-existent delta directory
+! covdup -delta-dir nonexistent
+stderr 'Error:'
