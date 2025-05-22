@@ -22,7 +22,7 @@ var (
 	MockMetaPackages = []PackageMetaStub{
 		{
 			Path:       "test/package",
-			Name:       "package", 
+			Name:       "package",
 			ModulePath: "test/module",
 			Functions: []icoverage.FuncDesc{
 				{
@@ -50,7 +50,7 @@ var (
 			},
 		},
 	}
-	
+
 	// Counter mock data
 	MockCounterSegments = [][]FuncPayload{
 		{{PkgIdx: 0, FuncIdx: 0, Counters: []uint32{1, 1}}},
