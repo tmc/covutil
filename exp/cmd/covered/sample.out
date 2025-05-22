@@ -1,0 +1,4 @@
+mode: set
+github.com/tmc/covutil/utils/exp/cmd/covered/sample.go:9.25,11.2 1 1
+github.com/tmc/covutil/utils/exp/cmd/covered/sample.go:14.27,18.2 3 0
+github.com/tmc/covutil/utils/exp/cmd/covered/sample.go:20.13,22.2 1 1
