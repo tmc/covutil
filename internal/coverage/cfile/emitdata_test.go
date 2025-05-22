@@ -6,7 +6,6 @@ package cfile
 
 import (
 	"fmt"
-	"internal/coverage"
 	"internal/platform"
 	"internal/testenv"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/tmc/covutil/internal/coverage"
 )
 
 // Set to true for debugging (linux only).

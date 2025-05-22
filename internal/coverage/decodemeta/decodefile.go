@@ -15,11 +15,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
-	"internal/coverage"
-	"internal/coverage/slicereader"
-	"internal/coverage/stringtab"
 	"io"
 	"os"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/slicereader"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
 )
 
 // CoverageMetaFileReader provides state and methods for reading

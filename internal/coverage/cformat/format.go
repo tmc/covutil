@@ -33,14 +33,15 @@ package cformat
 import (
 	"cmp"
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/cmerge"
 	"io"
 	"maps"
 	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/cmerge"
 )
 
 type Formatter struct {

@@ -7,13 +7,14 @@ package pods
 import (
 	"cmp"
 	"fmt"
-	"internal/coverage"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/tmc/covutil/internal/coverage"
 )
 
 // Pod encapsulates a set of files emitted during the executions of a

@@ -9,11 +9,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
-	"internal/coverage"
-	"internal/coverage/stringtab"
 	"io"
 	"os"
 	"unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
 )
 
 // This package contains APIs and helpers for writing out a meta-data

@@ -7,13 +7,14 @@ package decodecounter
 import (
 	"encoding/binary"
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/slicereader"
-	"internal/coverage/stringtab"
 	"io"
 	"os"
 	"strconv"
 	"unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/slicereader"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
 )
 
 // This file contains helpers for reading counter data files created

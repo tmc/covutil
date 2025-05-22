@@ -7,20 +7,21 @@ package cfile
 import (
 	"encoding/json"
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/calloc"
-	"internal/coverage/cformat"
-	"internal/coverage/cmerge"
-	"internal/coverage/decodecounter"
-	"internal/coverage/decodemeta"
-	"internal/coverage/pods"
-	"internal/coverage/rtcov"
-	"internal/runtime/atomic"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/calloc"
+	"github.com/tmc/covutil/internal/coverage/cformat"
+	"github.com/tmc/covutil/internal/coverage/cmerge"
+	"github.com/tmc/covutil/internal/coverage/decodecounter"
+	"github.com/tmc/covutil/internal/coverage/decodemeta"
+	"github.com/tmc/covutil/internal/coverage/pods"
+	"github.com/tmc/covutil/internal/coverage/rtcov"
 )
 
 // ProcessCoverTestDir is called from

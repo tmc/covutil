@@ -7,12 +7,13 @@ package pods_test
 import (
 	"fmt"
 	"hash/fnv"
-	"internal/coverage"
-	"internal/coverage/pods"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/pods"
 )
 
 func TestPodCollection(t *testing.T) {

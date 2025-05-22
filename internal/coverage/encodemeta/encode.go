@@ -14,11 +14,12 @@ import (
 	"fmt"
 	"hash"
 	"hash/fnv"
-	"internal/coverage"
-	"internal/coverage/stringtab"
-	"internal/coverage/uleb128"
 	"io"
 	"os"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
+	"github.com/tmc/covutil/internal/coverage/uleb128"
 )
 
 type CoverageMetaDataBuilder struct {

@@ -11,11 +11,12 @@ package decodemeta
 import (
 	"encoding/binary"
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/slicereader"
-	"internal/coverage/stringtab"
 	"io"
 	"os"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/slicereader"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
 )
 
 // See comments in the encodecovmeta package for details on the format.

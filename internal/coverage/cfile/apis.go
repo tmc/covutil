@@ -6,11 +6,12 @@ package cfile
 
 import (
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/rtcov"
 	"io"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/rtcov"
 )
 
 // WriteMetaDir implements [runtime/coverage.WriteMetaDir].

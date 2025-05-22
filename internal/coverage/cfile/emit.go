@@ -11,10 +11,6 @@ package cfile
 import (
 	"fmt"
 	"hash/fnv"
-	"internal/coverage"
-	"internal/coverage/encodecounter"
-	"internal/coverage/encodemeta"
-	"internal/coverage/rtcov"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,6 +19,11 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/encodecounter"
+	"github.com/tmc/covutil/internal/coverage/encodemeta"
+	"github.com/tmc/covutil/internal/coverage/rtcov"
 )
 
 // This file contains functions that support the writing of data files

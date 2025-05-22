@@ -7,7 +7,6 @@ package cfile
 import (
 	"encoding/json"
 	"flag"
-	"internal/coverage"
 	"internal/testenv"
 	"os"
 	"os/exec"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	_ "unsafe"
+
+	"github.com/tmc/covutil/internal/coverage"
 )
 
 func testGoCoverDir(t *testing.T) string {

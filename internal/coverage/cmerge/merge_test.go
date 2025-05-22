@@ -6,9 +6,10 @@ package cmerge_test
 
 import (
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/cmerge"
 	"testing"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/cmerge"
 )
 
 func TestClash(t *testing.T) {

@@ -59,7 +59,7 @@ var rtPkgs = [...]string{
 	"internal/msan",
 	"internal/profilerecord",
 	"internal/race",
-	"internal/runtime/atomic",
+	"sync/atomic",
 	"internal/runtime/exithook",
 	"internal/runtime/gc",
 	"internal/runtime/math",

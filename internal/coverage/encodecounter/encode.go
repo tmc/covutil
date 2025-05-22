@@ -8,14 +8,15 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/slicewriter"
-	"internal/coverage/stringtab"
-	"internal/coverage/uleb128"
 	"io"
 	"maps"
 	"os"
 	"slices"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/slicewriter"
+	"github.com/tmc/covutil/internal/coverage/stringtab"
+	"github.com/tmc/covutil/internal/coverage/uleb128"
 )
 
 // This package contains APIs and helpers for encoding initial portions

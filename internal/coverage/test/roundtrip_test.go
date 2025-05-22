@@ -6,14 +6,15 @@ package test
 
 import (
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/decodemeta"
-	"internal/coverage/encodemeta"
-	"internal/coverage/slicewriter"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/decodemeta"
+	"github.com/tmc/covutil/internal/coverage/encodemeta"
+	"github.com/tmc/covutil/internal/coverage/slicewriter"
 )
 
 func cmpFuncDesc(want, got coverage.FuncDesc) string {

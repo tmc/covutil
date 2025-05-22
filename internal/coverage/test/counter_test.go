@@ -6,13 +6,14 @@ package test
 
 import (
 	"fmt"
-	"internal/coverage"
-	"internal/coverage/decodecounter"
-	"internal/coverage/encodecounter"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tmc/covutil/internal/coverage"
+	"github.com/tmc/covutil/internal/coverage/decodecounter"
+	"github.com/tmc/covutil/internal/coverage/encodecounter"
 )
 
 type ctrVis struct {

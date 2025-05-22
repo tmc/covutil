@@ -6,9 +6,10 @@ package stringtab
 
 import (
 	"fmt"
-	"internal/coverage/slicereader"
-	"internal/coverage/uleb128"
 	"io"
+
+	"github.com/tmc/covutil/internal/coverage/slicereader"
+	"github.com/tmc/covutil/internal/coverage/uleb128"
 )
 
 // This package implements string table writer and reader utilities,

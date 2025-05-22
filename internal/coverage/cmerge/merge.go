@@ -9,8 +9,9 @@ package cmerge
 
 import (
 	"fmt"
-	"internal/coverage"
 	"math"
+
+	"github.com/tmc/covutil/internal/coverage"
 )
 
 type ModeMergePolicy uint8
