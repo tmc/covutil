@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/tmc/covutil/synthetic/parsers"
+	_ "github.com/tmc/covutil/synthetic/parsers/defaults" // Auto-register default parsers
 )
 
 // ScriptTracker provides specialized tracking for script execution
 type ScriptTracker struct {
 	*BasicTracker
-	scriptParsers map[string]ScriptParser
+	registry *parsers.Registry
 }
 
 // ScriptParser defines how to parse different types of scripts
@@ -24,8 +27,8 @@ type ScriptParser interface {
 // NewScriptTracker creates a new ScriptTracker with default parsers
 func NewScriptTracker(options ...Option) *ScriptTracker {
 	st := &ScriptTracker{
-		BasicTracker:  NewBasicTracker(options...),
-		scriptParsers: make(map[string]ScriptParser),
+		BasicTracker: NewBasicTracker(options...),
+		registry:     parsers.DefaultRegistry,
 	}
 
 	// Register default parsers
@@ -36,14 +39,31 @@ func NewScriptTracker(options ...Option) *ScriptTracker {
 	return st
 }
 
+// NewScriptTrackerWithRegistry creates a ScriptTracker with a custom parser registry
+func NewScriptTrackerWithRegistry(registry *parsers.Registry, options ...Option) *ScriptTracker {
+	return &ScriptTracker{
+		BasicTracker: NewBasicTracker(options...),
+		registry:     registry,
+	}
+}
+
 // RegisterParser registers a parser for a specific script type
-func (st *ScriptTracker) RegisterParser(scriptType string, parser ScriptParser) {
-	st.scriptParsers[scriptType] = parser
+// Deprecated: Use parsers.Register() instead for global registration
+func (st *ScriptTracker) RegisterParser(scriptType string, parser parsers.Parser) {
+	// For backward compatibility, we'll create a local registry if needed
+	if st.registry == parsers.DefaultRegistry {
+		st.registry = parsers.NewRegistry()
+		// Copy existing parsers
+		for _, p := range parsers.DefaultRegistry.List() {
+			st.registry.Register(p)
+		}
+	}
+	st.registry.Register(parser)
 }
 
 // ParseAndTrack parses a script and sets up tracking for its executable lines
 func (st *ScriptTracker) ParseAndTrack(scriptContent, scriptName, scriptType, testName string) error {
-	parser, exists := st.scriptParsers[scriptType]
+	parser, exists := st.registry.Get(scriptType)
 	if !exists {
 		return fmt.Errorf("no parser registered for script type: %s", scriptType)
 	}
@@ -72,6 +92,11 @@ func (st *ScriptTracker) ParseAndTrack(scriptContent, scriptName, scriptType, te
 	return nil
 }
 
+// GetRegisteredParsers returns information about all registered parsers
+func (st *ScriptTracker) GetRegisteredParsers() map[string][]string {
+	return st.registry.RegisteredTypes()
+}
+
 // TrackExecution records that a specific line in a script was executed
 func (st *ScriptTracker) TrackExecution(scriptName, testName string, lineNumber int) {
 	key := fmt.Sprintf("%s:%s", testName, scriptName)
@@ -86,6 +111,18 @@ func (st *ScriptTracker) TrackExecution(scriptName, testName string, lineNumber 
 
 // ShellScriptParser handles shell/bash scripts
 type ShellScriptParser struct{}
+
+func (p *ShellScriptParser) Name() string {
+	return "shell"
+}
+
+func (p *ShellScriptParser) Extensions() []string {
+	return []string{".sh", ".bash"}
+}
+
+func (p *ShellScriptParser) Description() string {
+	return "Parser for shell and bash scripts"
+}
 
 func (p *ShellScriptParser) ParseScript(content string) map[int]string {
 	lines := strings.Split(content, "\n")
@@ -132,6 +169,18 @@ func (p *ShellScriptParser) IsExecutable(line string) bool {
 
 // ScriptTestParser handles Go scripttest format
 type ScriptTestParser struct{}
+
+func (p *ScriptTestParser) Name() string {
+	return "scripttest"
+}
+
+func (p *ScriptTestParser) Extensions() []string {
+	return []string{".txtar", ".txt"}
+}
+
+func (p *ScriptTestParser) Description() string {
+	return "Parser for Go scripttest format files"
+}
 
 func (p *ScriptTestParser) ParseScript(content string) map[int]string {
 	lines := strings.Split(content, "\n")
@@ -187,19 +236,6 @@ func (p *ScriptTestParser) IsExecutable(line string) bool {
 }
 
 // Enhanced options for script tracking
-
-// WithScriptParser adds a custom script parser
-// Note: This option only works with ScriptTracker instances
-func WithScriptParser(scriptType string, parser ScriptParser) Option {
-	return func(t *BasicTracker) {
-		// This option can only be applied to ScriptTracker during construction
-		// We'll store it in labels and apply it later if needed
-		if t.labels == nil {
-			t.labels = make(map[string]string)
-		}
-		t.labels["_script_parser_"+scriptType] = "configured"
-	}
-}
 
 // WithTestName sets a default test name for the tracker
 func WithTestName(testName string) Option {
