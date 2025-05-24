@@ -5,6 +5,7 @@ package synthetic
 import (
 	"fmt"
 	"hash/fnv"
+	"sort"
 	"sync"
 	"time"
 
@@ -246,7 +247,15 @@ func (t *BasicTracker) GetReport() string {
 	totalCommands := 0
 	totalExecuted := 0
 
-	for _, coverage := range t.coverages {
+	// Sort coverages by artifact name for deterministic output
+	keys := make([]string, 0, len(t.coverages))
+	for key := range t.coverages {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		coverage := t.coverages[key]
 		commandCount := len(coverage.Commands)
 		executedCount := len(coverage.ExecutedLines)
 

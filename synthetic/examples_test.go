@@ -479,11 +479,11 @@ exec kubectl delete deployment myapp --ignore-not-found=true`
 	// Output:
 	// === Synthetic Coverage Report ===
 	//
-	// Artifact: deploy.sh (Test: integration-workflow)
-	//   Commands: 5 total, 5 executed (100.0%)
-	//
 	// Artifact: config.tmpl (Test: integration-workflow)
 	//   Commands: 7 total, 3 executed (42.9%)
+	//
+	// Artifact: deploy.sh (Test: integration-workflow)
+	//   Commands: 5 total, 5 executed (100.0%)
 	//
 	// Artifact: validate.txt (Test: integration-workflow)
 	//   Commands: 7 total, 3 executed (42.9%)
