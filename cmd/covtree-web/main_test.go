@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 func TestWebServerRoutes(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tmc/covutil/covtree"
 	"github.com/tmc/covutil/internal/covforest"
-	"github.com/tmc/covutil/internal/covtree"
 )
 
 var cmdAdd = &Command{

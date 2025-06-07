@@ -1,4 +1,4 @@
-module github.com/tmc/misc/covered
+module github.com/tmc/covutil/exp/cmd/covered
 
 go 1.24.3
 

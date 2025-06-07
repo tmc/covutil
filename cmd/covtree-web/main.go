@@ -21,6 +21,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -34,7 +35,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var (
@@ -42,6 +43,7 @@ var (
 	httpAddr    = flag.String("http", ":8080", "HTTP server address")
 	title       = flag.String("title", "Coverage Report", "custom title for the web interface")
 	openBrowser = flag.Bool("open", false, "open browser automatically after starting server")
+	watch       = flag.Bool("watch", false, "watch directory for changes and reload automatically")
 )
 
 func main() {
@@ -76,6 +78,22 @@ func main() {
 		HTTPAddr: *httpAddr,
 	}
 
+	// Set up file watching if requested
+	var watchedServer *WatchedWebServer
+	if *watch {
+		var err error
+		watchedServer, err = NewWatchedWebServer(server, *inputDir)
+		if err != nil {
+			log.Fatalf("failed to create watcher: %v", err)
+		}
+		defer watchedServer.Close()
+
+		ctx := context.Background()
+		if err := watchedServer.StartWatching(ctx); err != nil {
+			log.Fatalf("failed to start watching: %v", err)
+		}
+	}
+
 	// Set up HTTP handlers
 	mux := http.NewServeMux()
 	server.SetupRoutes(mux)
@@ -86,7 +104,11 @@ func main() {
 	}
 
 	log.Printf("loaded %d packages from %s", len(tree.Packages), *inputDir)
-	log.Printf("serving coverage web interface at http://localhost%s", *httpAddr)
+	if *watch {
+		log.Printf("serving coverage web interface at http://localhost%s (with auto-reload)", *httpAddr)
+	} else {
+		log.Printf("serving coverage web interface at http://localhost%s", *httpAddr)
+	}
 
 	// Open browser if requested
 	if *openBrowser {
@@ -114,10 +136,11 @@ The flags are:
 	-http address   HTTP server address (default :8080)
 	-title string   custom title for the web interface
 	-open           open browser automatically after starting server
+	-watch          watch directory for changes and reload automatically
 
 Example:
 
-	covtree-web -i=./coverage -http=:9000 -title="My Project Coverage" -open
+	covtree-web -i=./coverage -http=:9000 -title="My Project Coverage" -open -watch
 `)
 }
 

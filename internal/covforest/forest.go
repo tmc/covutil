@@ -14,7 +14,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 // Forest represents a collection of coverage trees from different sources
