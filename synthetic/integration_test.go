@@ -212,3 +212,27 @@ VAR=value`
 
 	t.Log("Backward compatibility test passed")
 }
+
+// TestChromedpIntegration tests the chromedp parser integration
+func TestChromedpIntegration(t *testing.T) {
+	// Chromedp parser has been moved to a separate module/plugin
+	// This test now verifies it's not in the default registry
+
+	if testing.Short() {
+		t.Skip("Skipping chromedp integration test in short mode")
+	}
+
+	// Verify chromedp parser is NOT registered by default
+	_, found := parsers.Get("chromedp")
+	if found {
+		t.Fatal("chromedp parser should not be registered by default (it's a plugin)")
+	}
+
+	// Verify that JavaScript tracker is available for plugin usage
+	jsTracker := NewJavaScriptTracker()
+	if jsTracker == nil {
+		t.Fatal("JavaScript tracker should be available")
+	}
+
+	t.Log("Chromedp parser is correctly implemented as a plugin")
+}

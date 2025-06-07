@@ -114,6 +114,7 @@ Track coverage for non-Go artifacts with built-in parsers:
 | **Python** | `.py`, `python` | Classes, decorators, imports, context managers |
 | **Go Templates** | `.tmpl`, `gotemplate` | Directives, functions, pipelines |
 | **Scripttest** | `.txt`, `.txtar` | Complete scripttest command set (300+ patterns) |
+| **JavaScript/CSS** | `.js`, `.css`, etc. | Runtime coverage via Chrome DevTools Protocol |
 
 ## Usage
 

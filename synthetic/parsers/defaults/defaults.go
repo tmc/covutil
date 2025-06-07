@@ -22,6 +22,7 @@ func RegisterDefaults() {
 	parsers.Register(&python.Parser{})
 	parsers.Register(&gotemplate.Parser{})
 	parsers.Register(&scripttest.Parser{})
+	// Note: chromedp parser is now available as a separate module/plugin
 }
 
 // MustRegisterDefaults registers all built-in parsers and panics on error
@@ -41,4 +42,5 @@ func MustRegisterDefaults() {
 	if err := parsers.Register(&scripttest.Parser{}); err != nil {
 		panic(err)
 	}
+	// Note: chromedp parser is now available as a separate module/plugin
 }
