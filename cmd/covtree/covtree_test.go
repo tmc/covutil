@@ -36,8 +36,8 @@ func TestCovtreeHelp(t *testing.T) {
 
 func TestCovtreeCommands(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		name        string
+		args        []string
 		expectError bool
 	}{
 		{"help percent", []string{"help", "percent"}, false},
@@ -83,7 +83,7 @@ func TestCovtreeDebugWithTestData(t *testing.T) {
 // Integration tests using real Sprig coverage data
 func TestCovtreeIntegrationWithSprig(t *testing.T) {
 	sprigCovPath := "/Users/tmc/go/src/github.com/Masterminds/sprig/coverage/per-test"
-	
+
 	// Check if Sprig coverage data exists
 	if _, err := os.Stat(sprigCovPath); os.IsNotExist(err) {
 		t.Skip("Sprig coverage data not available")
@@ -104,17 +104,17 @@ func TestCovtreeIntegrationWithSprig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testPath := filepath.Join(sprigCovPath, tt.testDir)
-			
+
 			// Test debug command
 			cmd := exec.Command("go", "run", ".", "debug", "-i="+testPath)
 			output, err := cmd.CombinedOutput()
-			
+
 			if tt.expectPass {
 				if err != nil {
 					t.Logf("Debug output: %s", string(output))
 					t.Errorf("Expected debug to succeed for %s, got error: %v", tt.testDir, err)
 				}
-				
+
 				outputStr := string(output)
 				if !strings.Contains(outputStr, "Found") {
 					t.Errorf("Expected 'Found' in debug output for %s", tt.testDir)
@@ -126,7 +126,7 @@ func TestCovtreeIntegrationWithSprig(t *testing.T) {
 
 func TestCovtreePercentWithSprig(t *testing.T) {
 	sprigCovPath := "/Users/tmc/go/src/github.com/Masterminds/sprig/coverage/per-test"
-	
+
 	if _, err := os.Stat(sprigCovPath); os.IsNotExist(err) {
 		t.Skip("Sprig coverage data not available")
 	}
@@ -143,10 +143,10 @@ func TestCovtreePercentWithSprig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testPath := filepath.Join(sprigCovPath, tt.testDir)
-			
+
 			cmd := exec.Command("go", "run", ".", "percent", "-i="+testPath)
 			output, err := cmd.CombinedOutput()
-			
+
 			outputStr := string(output)
 			if err != nil {
 				// Coverage data parsing may fail with certain formats - log and continue
@@ -158,7 +158,7 @@ func TestCovtreePercentWithSprig(t *testing.T) {
 				t.Errorf("Unexpected error for %s: %v", tt.testDir, err)
 				return
 			}
-			
+
 			// Should contain percentage information
 			if !strings.Contains(outputStr, "%") {
 				t.Errorf("Expected percentage symbol in output for %s: %s", tt.testDir, outputStr)
@@ -169,16 +169,16 @@ func TestCovtreePercentWithSprig(t *testing.T) {
 
 func TestCovtreeJsonWithSprig(t *testing.T) {
 	sprigCovPath := "/Users/tmc/go/src/github.com/Masterminds/sprig/coverage/per-test"
-	
+
 	if _, err := os.Stat(sprigCovPath); os.IsNotExist(err) {
 		t.Skip("Sprig coverage data not available")
 	}
 
 	testPath := filepath.Join(sprigCovPath, "simple_test")
-	
+
 	cmd := exec.Command("go", "run", ".", "json", "-i="+testPath)
 	output, err := cmd.CombinedOutput()
-	
+
 	outputStr := string(output)
 	if err != nil {
 		t.Logf("JSON command output: %s", outputStr)
@@ -189,13 +189,13 @@ func TestCovtreeJsonWithSprig(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	
+
 	// Should be valid JSON
 	if len(outputStr) == 0 || (!strings.Contains(outputStr, "{") || !strings.Contains(outputStr, "}")) {
 		t.Logf("Empty or invalid JSON output (expected with incompatible coverage data): %s", outputStr)
 		return
 	}
-	
+
 	// Try to parse as JSON to validate
 	var result map[string]interface{}
 	if err := json.Unmarshal(output, &result); err != nil {
@@ -205,16 +205,16 @@ func TestCovtreeJsonWithSprig(t *testing.T) {
 
 func TestCovtreeFuncWithSprig(t *testing.T) {
 	sprigCovPath := "/Users/tmc/go/src/github.com/Masterminds/sprig/coverage/per-test"
-	
+
 	if _, err := os.Stat(sprigCovPath); os.IsNotExist(err) {
 		t.Skip("Sprig coverage data not available")
 	}
 
 	testPath := filepath.Join(sprigCovPath, "crypto_functions_test")
-	
+
 	cmd := exec.Command("go", "run", ".", "func", "-i="+testPath)
 	output, err := cmd.CombinedOutput()
-	
+
 	outputStr := string(output)
 	if err != nil {
 		t.Logf("Func command output: %s", outputStr)
@@ -225,7 +225,7 @@ func TestCovtreeFuncWithSprig(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 		return
 	}
-	
+
 	// Should contain function information
 	if len(outputStr) == 0 {
 		t.Errorf("Expected non-empty func output")

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdDebug = &Command{
@@ -54,14 +54,14 @@ func runDebug(ctx context.Context, args []string) error {
 	fmt.Printf("Found %d coverage directories:\n", len(coverageDirs))
 	for i, dir := range coverageDirs {
 		fmt.Printf("%d. %s\n", i+1, dir)
-		
+
 		// List files in each directory
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			fmt.Printf("   Error reading directory: %v\n", err)
 			continue
 		}
-		
+
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				info, _ := entry.Info()

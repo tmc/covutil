@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdFunc = &Command{

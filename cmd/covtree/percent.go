@@ -10,7 +10,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdPercent = &Command{
@@ -54,10 +54,25 @@ func runPercent(ctx context.Context, args []string) error {
 		return fmt.Errorf("input directory does not exist: %s", *percentInputDir)
 	}
 
-	// Load coverage data from nested repository
+	// Load coverage data - try direct directory first, then nested repository
 	tree := covtree.NewCoverageTree()
-	if err := tree.LoadFromNestedRepository(*percentInputDir); err != nil {
-		return fmt.Errorf("failed to load coverage data from %s: %v", *percentInputDir, err)
+
+	// Check if the input directory itself contains coverage files
+	dirs, err := covtree.ScanForCoverageDirectories(*percentInputDir)
+	if err != nil {
+		return fmt.Errorf("failed to scan for coverage directories: %v", err)
+	}
+
+	// If the input directory itself is the only coverage directory found, load it directly
+	if len(dirs) == 1 && dirs[0] == *percentInputDir {
+		if err := tree.LoadFromDirectory(*percentInputDir); err != nil {
+			return fmt.Errorf("failed to load coverage data from %s: %v", *percentInputDir, err)
+		}
+	} else {
+		// Otherwise use nested repository loading
+		if err := tree.LoadFromNestedRepository(*percentInputDir); err != nil {
+			return fmt.Errorf("failed to load coverage data from %s: %v", *percentInputDir, err)
+		}
 	}
 
 	// Collect and sort packages

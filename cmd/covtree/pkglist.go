@@ -10,7 +10,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdPkglist = &Command{

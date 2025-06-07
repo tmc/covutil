@@ -15,6 +15,11 @@ import (
 
 // ScanForCoverageDirectories recursively scans the given root directory
 // for coverage data directories and returns all found pod directories.
+// A coverage directory is identified by the presence of both covmeta.*
+// and covcounters.* files, which are created by Go's coverage system.
+//
+// This function is useful for discovering coverage data in large repository
+// structures where coverage data may be scattered across multiple directories.
 func ScanForCoverageDirectories(root string) ([]string, error) {
 	var coverageDirs []string
 
@@ -39,7 +44,8 @@ func ScanForCoverageDirectories(root string) ([]string, error) {
 }
 
 // containsCoverageFiles checks if a directory contains Go coverage files
-// (covmeta.* or covcounters.* files)
+// (covmeta.* and covcounters.* files). Both file types must be present
+// for a directory to be considered a valid coverage directory.
 func containsCoverageFiles(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -74,6 +80,13 @@ func containsCoverageFiles(dir string) bool {
 // LoadFromNestedRepository loads coverage data from a nested repository structure.
 // It recursively scans the root directory for coverage data directories and loads
 // data from all found directories.
+//
+// This method is particularly useful for monorepos or projects with multiple
+// test runs stored in different subdirectories. It will find and aggregate
+// coverage data from all valid coverage directories within the tree.
+//
+// Returns NoCoverageDataError if no coverage directories are found,
+// or CoverageParseError if directories are found but none can be parsed.
 func (ct *CoverageTree) LoadFromNestedRepository(root string) error {
 	coverageDirs, err := ScanForCoverageDirectories(root)
 	if err != nil {
@@ -113,8 +126,11 @@ func (ct *CoverageTree) LoadFromNestedRepository(root string) error {
 	return nil
 }
 
-// NoCoverageDataError is returned when no coverage data is found in the specified directory
+// NoCoverageDataError is returned when no coverage data is found in the specified directory.
+// This typically means the directory doesn't contain any subdirectories with
+// covmeta.* and covcounters.* files.
 type NoCoverageDataError struct {
+	// Dir is the directory that was searched
 	Dir string
 }
 
@@ -122,9 +138,12 @@ func (e *NoCoverageDataError) Error() string {
 	return "no coverage data found in directory: " + e.Dir
 }
 
-// CoverageParseError is returned when coverage directories are found but cannot be parsed
+// CoverageParseError is returned when coverage directories are found but cannot be parsed.
+// This can happen when coverage files are corrupted or in an incompatible format.
 type CoverageParseError struct {
-	Dir   string
+	// Dir is the root directory that was searched
+	Dir string
+	// Count is the number of coverage directories found
 	Count int
 }
 

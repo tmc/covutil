@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdServe = &Command{

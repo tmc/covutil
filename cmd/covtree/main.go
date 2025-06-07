@@ -5,9 +5,11 @@
 // Covtree is a program for analyzing and visualizing Go coverage data.
 //
 // Usage:
+//
 //	covtree <command> [arguments]
 //
 // The commands are:
+//
 //	percent		report coverage percentages by package
 //	func		report coverage percentages by function
 //	pkglist		report list of packages with coverage data
@@ -145,6 +147,7 @@ var commands = []*Command{
 	cmdServe,
 	cmdJSON,
 	cmdDebug,
+	cmdHTML,
 }
 
 func init() {

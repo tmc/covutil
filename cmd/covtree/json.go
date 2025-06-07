@@ -12,11 +12,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tmc/covutil/internal/covtree"
+	"github.com/tmc/covutil/covtree"
 )
 
 var cmdJSON = &Command{
-	UsageLine: "covtree json -i=<directory> [-w] [-o=<file>]",
+	UsageLine: "covtree json -i=<directory> [-o=<file>]",
 	Short:     "convert coverage data to NDJSON format",
 	Long: `
 JSON converts coverage data to newline-delimited JSON (NDJSON) format,
@@ -26,24 +26,22 @@ The -i flag specifies a directory to scan recursively for coverage data.
 The directory can contain nested subdirectories with coverage data files
 produced by running "go build -cover" or similar.
 
-The -w flag enables watch mode, continuously monitoring the directory
-for changes and streaming updates to the output.
-
-The -o flag specifies an output file. If not specified in watch mode,
+The -o flag specifies an output file. If not specified,
 output is written to stdout.
 
 Example:
 
 	covtree json -i=./coverage-repo
-	covtree json -i=/path/to/coverage -w -o=coverage.ndjson
-	covtree json -i=./coverage -w | jq .
+	covtree json -i=/path/to/coverage -o=coverage.ndjson
+	covtree json -i=./coverage | jq .
+
+For watch mode with auto-reload, use covtree-web with the -watch flag.
 `,
 }
 
 var (
 	jsonInputDir = cmdJSON.Flag.String("i", "", "input directory to scan recursively for coverage data")
 	jsonOutput   = cmdJSON.Flag.String("o", "", "output file (default stdout)")
-	jsonWatch    = cmdJSON.Flag.Bool("w", false, "watch directory for changes and stream updates")
 )
 
 func init() {
@@ -91,11 +89,7 @@ func runJSON(ctx context.Context, args []string) error {
 
 	encoder := json.NewEncoder(output)
 
-	if *jsonWatch {
-		return watchAndStreamJSON(ctx, *jsonInputDir, encoder)
-	}
-
-	// One-time processing
+	// Process directory once
 	return processDirectoryToJSON(*jsonInputDir, encoder)
 }
 
@@ -183,10 +177,4 @@ func processDirectoryToJSON(dir string, encoder *json.Encoder) error {
 	}
 
 	return nil
-}
-
-func isCoverageFile(filename string) bool {
-	base := filepath.Base(filename)
-	return (len(base) > 8 && base[:8] == "covmeta.") ||
-		(len(base) > 12 && base[:12] == "covcounters.")
 }
